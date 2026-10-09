@@ -36,7 +36,7 @@
       font-weight: 500;
       color: #4b5563;
     }
-    select {
+    select, button {
       font-size: 12px;
       padding: 4px 8px;
       border: 1px solid #d1d5db;
@@ -46,9 +46,51 @@
       cursor: pointer;
       outline: none;
     }
-    select:focus {
+    select:focus, button:hover {
       border-color: #000091;
       background-color: #ffffff;
+    }
+    .btn-toggle {
+      background-color: #eef2ff;
+      border-color: #c7d2fe;
+      color: #3730a3;
+      font-weight: 600;
+    }
+    /* Panneau personnalisé de couleurs */
+    #customColorsPanel {
+      display: none;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    #customColorsPanel.open {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .color-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    .color-item input[type="color"] {
+      width: 22px;
+      height: 22px;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      border-radius: 3px;
+      background: none;
     }
     .chart-container {
       position: relative;
@@ -75,6 +117,10 @@
     <div class="control-group">
       <label for="colorPalette">Palette :</label>
       <select id="colorPalette">
+        <option value="custom">Personnalisée (barre par barre)</option>
+        <option value="red_to_green">Dégradé Rouge ➔ Vert (Performance)</option>
+        <option value="green_to_red">Dégradé Vert ➔ Rouge</option>
+        <option value="threshold_rg">Seuil Performance (Rouge / Vert)</option>
         <option value="marianne">Bleu Institutionnel</option>
         <option value="vibrant">Moderne (Multicolore)</option>
         <option value="blues">Dégradé Bleu</option>
@@ -83,7 +129,12 @@
         <option value="pastel">Pastel</option>
       </select>
     </div>
+
+    <button type="button" id="btnToggleColors" class="btn-toggle">🎨 Couleurs par élément</button>
   </div>
+
+  <!-- Panneau des couleurs individuelles -->
+  <div id="customColorsPanel"></div>
 
   <div class="chart-container">
     <canvas id="monGraphique"></canvas>
@@ -95,26 +146,15 @@
     let monGraphique = null;
     let donneesActuelles = [];
     let mappingsActuels = {};
+    let customColorMap = {}; // Clé: label, Valeur: code hex
 
     const PALETTES = {
-      marianne: [
-        '#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'
-      ],
-      vibrant: [
-        '#000091', '#e1000f', '#008941', '#f59f00', '#6f42c1', '#17a2b8', '#e83e8c', '#fd7e14'
-      ],
-      blues: [
-        '#002b66', '#0047ab', '#0066cc', '#3385ff', '#66a3ff', '#99c2ff', '#cce0ff'
-      ],
-      greens: [
-        '#0e4429', '#006644', '#00875a', '#36b37e', '#57d9a3', '#79f2c0', '#abf5d1'
-      ],
-      warm: [
-        '#8a1c14', '#c93b2b', '#e65100', '#f57c00', '#ff9800', '#ffb74d', '#ffe082'
-      ],
-      pastel: [
-        '#93c5fd', '#86efac', '#fde047', '#fca5a5', '#d8b4fe', '#fdba74', '#a5f3fc'
-      ]
+      marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
+      vibrant: ['#000091', '#e1000f', '#008941', '#f59f00', '#6f42c1', '#17a2b8', '#e83e8c', '#fd7e14'],
+      blues: ['#002b66', '#0047ab', '#0066cc', '#3385ff', '#66a3ff', '#99c2ff', '#cce0ff'],
+      greens: ['#0e4429', '#006644', '#00875a', '#36b37e', '#57d9a3', '#79f2c0', '#abf5d1'],
+      warm: ['#8a1c14', '#c93b2b', '#e65100', '#f57c00', '#ff9800', '#ffb74d', '#ffe082'],
+      pastel: ['#93c5fd', '#86efac', '#fde047', '#fca5a5', '#d8b4fe', '#fdba74', '#a5f3fc']
     };
 
     grist.ready({
@@ -125,36 +165,27 @@
       requiredAccess: 'read table'
     });
 
-    // Écoute des enregistrements de la table
     grist.onRecords(function(records, mappings) {
       donneesActuelles = records || [];
       mappingsActuels = mappings || {};
+      mettreAJourSelecteurCouleurs();
       rendreGraphique();
     });
 
-    // Écoute des options sauvegardées du widget
     grist.onOptions(function(options) {
-      if (options && options.chartType) {
-        document.getElementById('chartType').value = options.chartType;
+      if (options) {
+        if (options.chartType) document.getElementById('chartType').value = options.chartType;
+        if (options.colorPalette) document.getElementById('colorPalette').value = options.colorPalette;
+        if (options.customColorMap) customColorMap = options.customColorMap;
       }
-      if (options && options.colorPalette) {
-        document.getElementById('colorPalette').value = options.colorPalette;
-      }
+      mettreAJourSelecteurCouleurs();
       rendreGraphique();
     });
-
-    function getPaletteColors(count, name) {
-      const base = PALETTES[name] || PALETTES.marianne;
-      const colors = [];
-      for (let i = 0; i < count; i++) {
-        colors.push(base[i % base.length]);
-      }
-      return colors;
-    }
 
     function sauvegarderPreferences() {
       grist.setOption('chartType', document.getElementById('chartType').value);
       grist.setOption('colorPalette', document.getElementById('colorPalette').value);
+      grist.setOption('customColorMap', customColorMap);
     }
 
     document.getElementById('chartType').addEventListener('change', () => {
@@ -167,9 +198,24 @@
       rendreGraphique();
     });
 
-    function rendreGraphique() {
-      if (!donneesActuelles || donneesActuelles.length === 0) return;
+    document.getElementById('btnToggleColors').addEventListener('click', () => {
+      const p = document.getElementById('customColorsPanel');
+      p.classList.toggle('open');
+    });
 
+    // Interpolation couleur (RGB) pour les dégradés
+    function interpolateColor(color1, color2, factor) {
+      const c1 = parseInt(color1.slice(1), 16);
+      const c2 = parseInt(color2.slice(1), 16);
+      const r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
+      const r2 = (c2 >> 16) & 255, g2 = (c2 >> 8) & 255, b2 = c2 & 255;
+      const r = Math.round(r1 + factor * (r2 - r1));
+      const g = Math.round(g1 + factor * (g2 - g1));
+      const b = Math.round(b1 + factor * (b2 - b1));
+      return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function extraireLabelsEtValeurs() {
       const catKey = (mappingsActuels && mappingsActuels.Categorie) ? mappingsActuels.Categorie : 'Categorie';
       const valKey = (mappingsActuels && mappingsActuels.Valeur) ? mappingsActuels.Valeur : 'Valeur';
 
@@ -184,9 +230,7 @@
           }
         }
         if (val === null || val === undefined || val === '') return "Sans libellé";
-        if (typeof val === 'object') {
-          return Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val));
-        }
+        if (typeof val === 'object') return Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val));
         return String(val);
       });
 
@@ -195,24 +239,91 @@
         return Number(num) || 0;
       });
 
+      return { labels, values };
+    }
+
+    function mettreAJourSelecteurCouleurs() {
+      const { labels } = extraireLabelsEtValeurs();
+      const container = document.getElementById('customColorsPanel');
+      container.innerHTML = '';
+
+      labels.forEach((lbl, index) => {
+        const item = document.createElement('div');
+        item.className = 'color-item';
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        // Couleur par défaut si non définie
+        colorInput.value = customColorMap[lbl] || (PALETTES.vibrant[index % PALETTES.vibrant.length]);
+
+        colorInput.addEventListener('change', (e) => {
+          customColorMap[lbl] = e.target.value;
+          document.getElementById('colorPalette').value = 'custom';
+          sauvegarderPreferences();
+          rendreGraphique();
+        });
+
+        const span = document.createElement('span');
+        span.textContent = lbl;
+
+        item.appendChild(colorInput);
+        item.appendChild(span);
+        container.appendChild(item);
+      });
+    }
+
+    function calculerCouleurs(labels, values, paletteName) {
+      const count = labels.length;
+      const minVal = Math.min(...values);
+      const maxVal = Math.max(...values);
+      const range = (maxVal - minVal) === 0 ? 1 : (maxVal - minVal);
+      const avgVal = values.reduce((a, b) => a + b, 0) / (count || 1);
+
+      if (paletteName === 'custom') {
+        return labels.map((lbl, idx) => customColorMap[lbl] || PALETTES.vibrant[idx % PALETTES.vibrant.length]);
+      }
+
+      if (paletteName === 'threshold_rg') {
+        // En dessous de la moyenne = rouge (#e1000f), au dessus = vert (#008941)
+        return values.map(v => v >= avgVal ? '#008941' : '#e1000f');
+      }
+
+      if (paletteName === 'red_to_green') {
+        // Plus faible = Rouge (#e1000f), Plus fort = Vert (#008941)
+        return values.map(v => {
+          const factor = (v - minVal) / range;
+          return interpolateColor('#e1000f', '#008941', factor);
+        });
+      }
+
+      if (paletteName === 'green_to_red') {
+        // Plus faible = Vert (#008941), Plus fort = Rouge (#e1000f)
+        return values.map(v => {
+          const factor = (v - minVal) / range;
+          return interpolateColor('#008941', '#e1000f', factor);
+        });
+      }
+
+      const base = PALETTES[paletteName] || PALETTES.marianne;
+      return labels.map((_, i) => base[i % base.length]);
+    }
+
+    function rendreGraphique() {
+      if (!donneesActuelles || donneesActuelles.length === 0) return;
+
+      const { labels, values } = extraireLabelsEtValeurs();
       const selectedType = document.getElementById('chartType').value;
       const selectedPalette = document.getElementById('colorPalette').value;
-      const colors = getPaletteColors(labels.length, selectedPalette);
+      const colors = calculerCouleurs(labels, values, selectedPalette);
 
       const isCircular = (selectedType === 'pie' || selectedType === 'doughnut');
       const isHorizontal = (selectedType === 'horizontalBar');
       const isLine = (selectedType === 'line');
-
       const chartType = isHorizontal ? 'bar' : selectedType;
-
-      let backgroundColors = colors;
-      if (!isCircular && !isHorizontal && selectedPalette === 'marianne') {
-        backgroundColors = '#000091';
-      }
 
       const dataset = {
         data: values,
-        backgroundColor: backgroundColors,
+        backgroundColor: colors,
         borderColor: isLine ? colors[0] : (isCircular ? '#ffffff' : undefined),
         borderWidth: isCircular ? 2 : (isLine ? 3 : 0),
         borderRadius: (chartType === 'bar' && !isCircular) ? 4 : 0,
@@ -221,10 +332,7 @@
       };
 
       const ctx = document.getElementById('monGraphique').getContext('2d');
-
-      if (monGraphique) {
-        monGraphique.destroy();
-      }
+      if (monGraphique) monGraphique.destroy();
 
       monGraphique = new Chart(ctx, {
         type: chartType,
@@ -259,7 +367,7 @@
             },
             y: {
               beginAtZero: true,
-              grace: isHorizontal ? 0 : '12%',
+              grace: isHorizontal ? 0 : '15%',
               grid: { display: !isHorizontal },
               ticks: { precision: 0 }
             }
