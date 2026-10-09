@@ -10,7 +10,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 10px;
+      padding: 8px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: #ffffff;
       color: #1e1e1e;
@@ -18,61 +18,108 @@
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
+      position: relative;
     }
-    .toolbar {
+
+    /* Barre supérieure avec les 2 boutons */
+    .top-bar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      height: 28px;
+    }
+
+    .btn-action {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+      background: #f8fafc;
+      color: #334155;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .btn-action:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+
+    .btn-save {
+      background: #000091;
+      color: #ffffff;
+      border-color: #000091;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .btn-save:hover {
+      background: #1212ff;
+      border-color: #1212ff;
+    }
+
+    /* Panneaux rétractables */
+    .sub-panel {
+      display: none;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      z-index: 10;
+    }
+    .sub-panel.open {
+      display: block;
+    }
+
+    .panel-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 12px;
       align-items: center;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 8px;
     }
+
     .control-group {
       display: flex;
       align-items: center;
       gap: 6px;
       font-size: 12px;
+      color: #475569;
       font-weight: 500;
-      color: #4b5563;
     }
-    select, button {
+
+    select {
       font-size: 12px;
       padding: 4px 8px;
-      border: 1px solid #d1d5db;
+      border: 1px solid #cbd5e1;
       border-radius: 4px;
-      background-color: #f9fafb;
-      color: #111827;
+      background-color: #ffffff;
+      color: #0f172a;
       cursor: pointer;
       outline: none;
     }
-    select:focus, button:hover {
+    select:focus {
       border-color: #000091;
-      background-color: #ffffff;
     }
-    .btn-toggle {
-      background-color: #eef2ff;
-      border-color: #c7d2fe;
-      color: #3730a3;
-      font-weight: 600;
-    }
-    /* Panneau personnalisé de couleurs */
-    #customColorsPanel {
+
+    /* Sélecteurs individuels de couleur */
+    #customColorsContainer {
       display: none;
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      padding: 8px 12px;
-      margin-bottom: 8px;
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 8px;
+      margin-top: 8px;
       max-height: 120px;
       overflow-y: auto;
-      font-size: 12px;
     }
-    #customColorsPanel.open {
+    #customColorsContainer.show {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
+      gap: 10px;
     }
     .color-item {
       display: flex;
@@ -82,16 +129,18 @@
       padding: 3px 8px;
       border-radius: 4px;
       border: 1px solid #e2e8f0;
+      font-size: 11px;
     }
     .color-item input[type="color"] {
-      width: 22px;
-      height: 22px;
+      width: 20px;
+      height: 20px;
       border: none;
       padding: 0;
       cursor: pointer;
-      border-radius: 3px;
       background: none;
+      border-radius: 3px;
     }
+
     .chart-container {
       position: relative;
       flex: 1;
@@ -102,40 +151,54 @@
 </head>
 <body>
 
-  <div class="toolbar">
-    <div class="control-group">
-      <label for="chartType">Format :</label>
-      <select id="chartType">
-        <option value="bar">Barres verticales</option>
-        <option value="horizontalBar">Barres horizontales</option>
-        <option value="pie">Camembert</option>
-        <option value="doughnut">Donut</option>
-        <option value="line">Courbe</option>
-      </select>
-    </div>
-
-    <div class="control-group">
-      <label for="colorPalette">Palette :</label>
-      <select id="colorPalette">
-        <option value="custom">Personnalisée (barre par barre)</option>
-        <option value="red_to_green">Dégradé Rouge ➔ Vert (Performance)</option>
-        <option value="green_to_red">Dégradé Vert ➔ Rouge</option>
-        <option value="threshold_rg">Seuil Performance (Rouge / Vert)</option>
-        <option value="marianne">Bleu Institutionnel</option>
-        <option value="vibrant">Moderne (Multicolore)</option>
-        <option value="blues">Dégradé Bleu</option>
-        <option value="greens">Dégradé Vert</option>
-        <option value="warm">Tons Chauds</option>
-        <option value="pastel">Pastel</option>
-      </select>
-    </div>
-
-    <button type="button" id="btnToggleColors" class="btn-toggle">🎨 Couleurs par élément</button>
+  <!-- Boutons de commande -->
+  <div class="top-bar">
+    <button type="button" id="btnToggleFormat" class="btn-action">📊 Format</button>
+    <button type="button" id="btnToggleCouleurs" class="btn-action">🎨 Couleurs</button>
   </div>
 
-  <!-- Panneau des couleurs individuelles -->
-  <div id="customColorsPanel"></div>
+  <!-- Volet Format -->
+  <div id="panelFormat" class="sub-panel">
+    <div class="panel-row">
+      <div class="control-group">
+        <label for="chartType">Type de graphique :</label>
+        <select id="chartType">
+          <option value="bar">Barres verticales</option>
+          <option value="horizontalBar">Barres horizontales</option>
+          <option value="pie">Camembert</option>
+          <option value="doughnut">Donut</option>
+          <option value="line">Courbe</option>
+        </select>
+      </div>
+      <button type="button" id="btnSaveFormat" class="btn-action btn-save">💾 Enregistrer et fermer</button>
+    </div>
+  </div>
 
+  <!-- Volet Couleurs -->
+  <div id="panelCouleurs" class="sub-panel">
+    <div class="panel-row">
+      <div class="control-group">
+        <label for="colorPalette">Palette :</label>
+        <select id="colorPalette">
+          <option value="custom">Personnalisée (barre par barre)</option>
+          <option value="red_to_green">Dégradé Rouge ➔ Vert (Performance)</option>
+          <option value="green_to_red">Dégradé Vert ➔ Rouge</option>
+          <option value="threshold_rg">Seuil Performance (Rouge / Vert)</option>
+          <option value="marianne">Bleu Institutionnel</option>
+          <option value="vibrant">Moderne (Multicolore)</option>
+          <option value="blues">Dégradé Bleu</option>
+          <option value="greens">Dégradé Vert</option>
+          <option value="warm">Tons Chauds</option>
+          <option value="pastel">Pastel</option>
+        </select>
+      </div>
+      <button type="button" id="btnSaveCouleurs" class="btn-action btn-save">💾 Enregistrer et fermer</button>
+    </div>
+    <!-- Liste détaillée barre par barre -->
+    <div id="customColorsContainer"></div>
+  </div>
+
+  <!-- Espace plein écran pour le graphique -->
   <div class="chart-container">
     <canvas id="monGraphique"></canvas>
   </div>
@@ -146,7 +209,7 @@
     let monGraphique = null;
     let donneesActuelles = [];
     let mappingsActuels = {};
-    let customColorMap = {}; // Clé: label, Valeur: code hex
+    let customColorMap = {};
 
     const PALETTES = {
       marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
@@ -188,22 +251,44 @@
       grist.setOption('customColorMap', customColorMap);
     }
 
+    // Gestion de l'ouverture / fermeture des 2 boutons
+    const panelFormat = document.getElementById('panelFormat');
+    const panelCouleurs = document.getElementById('panelCouleurs');
+
+    document.getElementById('btnToggleFormat').addEventListener('click', () => {
+      panelCouleurs.classList.remove('open');
+      panelFormat.classList.toggle('open');
+    });
+
+    document.getElementById('btnToggleCouleurs').addEventListener('click', () => {
+      panelFormat.classList.remove('open');
+      panelCouleurs.classList.toggle('open');
+    });
+
+    document.getElementById('btnSaveFormat').addEventListener('click', () => {
+      sauvegarderPreferences();
+      panelFormat.classList.remove('open');
+    });
+
+    document.getElementById('btnSaveCouleurs').addEventListener('click', () => {
+      sauvegarderPreferences();
+      panelCouleurs.classList.remove('open');
+    });
+
     document.getElementById('chartType').addEventListener('change', () => {
-      sauvegarderPreferences();
       rendreGraphique();
     });
 
-    document.getElementById('colorPalette').addEventListener('change', () => {
-      sauvegarderPreferences();
+    document.getElementById('colorPalette').addEventListener('change', (e) => {
+      const container = document.getElementById('customColorsContainer');
+      if (e.target.value === 'custom') {
+        container.classList.add('show');
+      } else {
+        container.classList.remove('show');
+      }
       rendreGraphique();
     });
 
-    document.getElementById('btnToggleColors').addEventListener('click', () => {
-      const p = document.getElementById('customColorsPanel');
-      p.classList.toggle('open');
-    });
-
-    // Interpolation couleur (RGB) pour les dégradés
     function interpolateColor(color1, color2, factor) {
       const c1 = parseInt(color1.slice(1), 16);
       const c2 = parseInt(color2.slice(1), 16);
@@ -244,8 +329,14 @@
 
     function mettreAJourSelecteurCouleurs() {
       const { labels } = extraireLabelsEtValeurs();
-      const container = document.getElementById('customColorsPanel');
+      const container = document.getElementById('customColorsContainer');
       container.innerHTML = '';
+
+      if (document.getElementById('colorPalette').value === 'custom') {
+        container.classList.add('show');
+      } else {
+        container.classList.remove('show');
+      }
 
       labels.forEach((lbl, index) => {
         const item = document.createElement('div');
@@ -253,13 +344,10 @@
 
         const colorInput = document.createElement('input');
         colorInput.type = 'color';
-        // Couleur par défaut si non définie
         colorInput.value = customColorMap[lbl] || (PALETTES.vibrant[index % PALETTES.vibrant.length]);
 
         colorInput.addEventListener('change', (e) => {
           customColorMap[lbl] = e.target.value;
-          document.getElementById('colorPalette').value = 'custom';
-          sauvegarderPreferences();
           rendreGraphique();
         });
 
@@ -282,22 +370,16 @@
       if (paletteName === 'custom') {
         return labels.map((lbl, idx) => customColorMap[lbl] || PALETTES.vibrant[idx % PALETTES.vibrant.length]);
       }
-
       if (paletteName === 'threshold_rg') {
-        // En dessous de la moyenne = rouge (#e1000f), au dessus = vert (#008941)
         return values.map(v => v >= avgVal ? '#008941' : '#e1000f');
       }
-
       if (paletteName === 'red_to_green') {
-        // Plus faible = Rouge (#e1000f), Plus fort = Vert (#008941)
         return values.map(v => {
           const factor = (v - minVal) / range;
           return interpolateColor('#e1000f', '#008941', factor);
         });
       }
-
       if (paletteName === 'green_to_red') {
-        // Plus faible = Vert (#008941), Plus fort = Rouge (#e1000f)
         return values.map(v => {
           const factor = (v - minVal) / range;
           return interpolateColor('#008941', '#e1000f', factor);
