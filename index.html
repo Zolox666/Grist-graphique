@@ -2,26 +2,89 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Histogramme Grist avec étiquettes</title>
+  <title>Widget Graphiques Multiples Grist</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 12px;
-      font-family: sans-serif;
-      box-sizing: border-box;
+      padding: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: #ffffff;
+      color: #1e1e1e;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
+      margin-bottom: 8px;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #4b5563;
+    }
+    select {
+      font-size: 12px;
+      padding: 4px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background-color: #f9fafb;
+      color: #111827;
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus {
+      border-color: #000091;
+      background-color: #ffffff;
     }
     .chart-container {
       position: relative;
+      flex: 1;
       width: 100%;
-      height: 90vh;
+      min-height: 0;
     }
   </style>
 </head>
 <body>
+
+  <div class="toolbar">
+    <div class="control-group">
+      <label for="chartType">Format :</label>
+      <select id="chartType">
+        <option value="bar">Barres verticales</option>
+        <option value="horizontalBar">Barres horizontales</option>
+        <option value="pie">Camembert</option>
+        <option value="doughnut">Donut</option>
+        <option value="line">Courbe</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="colorPalette">Palette :</label>
+      <select id="colorPalette">
+        <option value="marianne">Bleu Institutionnel</option>
+        <option value="vibrant">Moderne (Multicolore)</option>
+        <option value="blues">Dégradé Bleu</option>
+        <option value="greens">Dégradé Vert</option>
+        <option value="warm">Tons Chauds</option>
+        <option value="pastel">Pastel</option>
+      </select>
+    </div>
+  </div>
+
   <div class="chart-container">
     <canvas id="monGraphique"></canvas>
   </div>
@@ -30,6 +93,29 @@
     Chart.register(ChartDataLabels);
 
     let monGraphique = null;
+    let donneesActuelles = [];
+    let mappingsActuels = {};
+
+    const PALETTES = {
+      marianne: [
+        '#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'
+      ],
+      vibrant: [
+        '#000091', '#e1000f', '#008941', '#f59f00', '#6f42c1', '#17a2b8', '#e83e8c', '#fd7e14'
+      ],
+      blues: [
+        '#002b66', '#0047ab', '#0066cc', '#3385ff', '#66a3ff', '#99c2ff', '#cce0ff'
+      ],
+      greens: [
+        '#0e4429', '#006644', '#00875a', '#36b37e', '#57d9a3', '#79f2c0', '#abf5d1'
+      ],
+      warm: [
+        '#8a1c14', '#c93b2b', '#e65100', '#f57c00', '#ff9800', '#ffb74d', '#ffe082'
+      ],
+      pastel: [
+        '#93c5fd', '#86efac', '#fde047', '#fca5a5', '#d8b4fe', '#fdba74', '#a5f3fc'
+      ]
+    };
 
     grist.ready({
       columns: [
@@ -39,19 +125,57 @@
       requiredAccess: 'read table'
     });
 
+    // Écoute des enregistrements de la table
     grist.onRecords(function(records, mappings) {
-      if (!records || records.length === 0) return;
+      donneesActuelles = records || [];
+      mappingsActuels = mappings || {};
+      rendreGraphique();
+    });
 
-      // Clés réelles mappées par Grist
-      const catKey = (mappings && mappings.Categorie) ? mappings.Categorie : 'Categorie';
-      const valKey = (mappings && mappings.Valeur) ? mappings.Valeur : 'Valeur';
+    // Écoute des options sauvegardées du widget
+    grist.onOptions(function(options) {
+      if (options && options.chartType) {
+        document.getElementById('chartType').value = options.chartType;
+      }
+      if (options && options.colorPalette) {
+        document.getElementById('colorPalette').value = options.colorPalette;
+      }
+      rendreGraphique();
+    });
 
-      const labels = records.map(r => {
-        // Recherche prioritaire : clé mappée, ou clé directe 'Categorie', ou première colonne qui n'est ni 'id' ni 'count'
+    function getPaletteColors(count, name) {
+      const base = PALETTES[name] || PALETTES.marianne;
+      const colors = [];
+      for (let i = 0; i < count; i++) {
+        colors.push(base[i % base.length]);
+      }
+      return colors;
+    }
+
+    function sauvegarderPreferences() {
+      grist.setOption('chartType', document.getElementById('chartType').value);
+      grist.setOption('colorPalette', document.getElementById('colorPalette').value);
+    }
+
+    document.getElementById('chartType').addEventListener('change', () => {
+      sauvegarderPreferences();
+      rendreGraphique();
+    });
+
+    document.getElementById('colorPalette').addEventListener('change', () => {
+      sauvegarderPreferences();
+      rendreGraphique();
+    });
+
+    function rendreGraphique() {
+      if (!donneesActuelles || donneesActuelles.length === 0) return;
+
+      const catKey = (mappingsActuels && mappingsActuels.Categorie) ? mappingsActuels.Categorie : 'Categorie';
+      const valKey = (mappingsActuels && mappingsActuels.Valeur) ? mappingsActuels.Valeur : 'Valeur';
+
+      const labels = donneesActuelles.map(r => {
         let val = r[catKey] !== undefined ? r[catKey] : r.Categorie;
-
         if (val === undefined || val === null || val === '') {
-          // Secours : on cherche la première valeur non numérique du record
           for (let k of Object.keys(r)) {
             if (k !== 'id' && k !== 'count' && k !== valKey && k !== 'group' && typeof r[k] === 'string') {
               val = r[k];
@@ -59,7 +183,6 @@
             }
           }
         }
-
         if (val === null || val === undefined || val === '') return "Sans libellé";
         if (typeof val === 'object') {
           return Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val));
@@ -67,10 +190,35 @@
         return String(val);
       });
 
-      const dataValues = records.map(r => {
+      const values = donneesActuelles.map(r => {
         let num = r[valKey] !== undefined ? r[valKey] : (r.Valeur !== undefined ? r.Valeur : r.count);
         return Number(num) || 0;
       });
+
+      const selectedType = document.getElementById('chartType').value;
+      const selectedPalette = document.getElementById('colorPalette').value;
+      const colors = getPaletteColors(labels.length, selectedPalette);
+
+      const isCircular = (selectedType === 'pie' || selectedType === 'doughnut');
+      const isHorizontal = (selectedType === 'horizontalBar');
+      const isLine = (selectedType === 'line');
+
+      const chartType = isHorizontal ? 'bar' : selectedType;
+
+      let backgroundColors = colors;
+      if (!isCircular && !isHorizontal && selectedPalette === 'marianne') {
+        backgroundColors = '#000091';
+      }
+
+      const dataset = {
+        data: values,
+        backgroundColor: backgroundColors,
+        borderColor: isLine ? colors[0] : (isCircular ? '#ffffff' : undefined),
+        borderWidth: isCircular ? 2 : (isLine ? 3 : 0),
+        borderRadius: (chartType === 'bar' && !isCircular) ? 4 : 0,
+        fill: isLine ? false : undefined,
+        tension: isLine ? 0.2 : undefined
+      };
 
       const ctx = document.getElementById('monGraphique').getContext('2d');
 
@@ -79,43 +227,46 @@
       }
 
       monGraphique = new Chart(ctx, {
-        type: 'bar',
+        type: chartType,
         data: {
           labels: labels,
-          datasets: [{
-            data: dataValues,
-            backgroundColor: '#000091',
-            borderRadius: 4
-          }]
+          datasets: [dataset]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          indexAxis: isHorizontal ? 'y' : 'x',
           plugins: {
-            legend: { display: false },
+            legend: {
+              display: isCircular,
+              position: 'bottom',
+              labels: { boxWidth: 12, font: { size: 11 } }
+            },
             datalabels: {
-              anchor: 'end',
-              align: 'top',
-              color: '#161616',
-              font: { weight: 'bold', size: 12 },
+              anchor: isCircular ? 'center' : 'end',
+              align: isCircular ? 'center' : (isHorizontal ? 'right' : 'top'),
+              color: isCircular ? '#ffffff' : '#1e1e1e',
+              font: { weight: 'bold', size: 11 },
               formatter: function(value) {
                 return value > 0 ? value : '';
               }
             }
           },
-          scales: {
-            y: {
-              beginAtZero: true,
-              grace: '15%',
+          scales: isCircular ? {} : {
+            x: {
+              grid: { display: isHorizontal },
               ticks: { precision: 0 }
             },
-            x: {
-              grid: { display: false }
+            y: {
+              beginAtZero: true,
+              grace: isHorizontal ? 0 : '12%',
+              grid: { display: !isHorizontal },
+              ticks: { precision: 0 }
             }
           }
         }
       });
-    });
+    }
   </script>
 </body>
 </html>
