@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Histogramme Grist avec étiquettes</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: sans-serif;
+      box-sizing: border-box;
+    }
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 90vh;
+    }
+  </style>
+</head>
+<body>
+  <div class="chart-container">
+    <canvas id="monGraphique"></canvas>
+  </div>
+
+  <script>
+    Chart.register(ChartDataLabels);
+
+    let monGraphique = null;
+
+    grist.ready({
+      columns: [
+        { name: "Categorie", title: "Colonne des catégories", type: "Text" },
+        { name: "Valeur", title: "Colonne des valeurs (ou count)", type: "Numeric" }
+      ],
+      requiredAccess: 'read table'
+    });
+
+    grist.onRecords(function(records, mappings) {
+      if (!records || records.length === 0) return;
+
+      const labels = records.map(r => r.Categorie || "Non défini");
+      const dataValues = records.map(r => r.Valeur || 0);
+
+      const ctx = document.getElementById('monGraphique').getContext('2d');
+
+      if (monGraphique) {
+        monGraphique.destroy();
+      }
+
+      monGraphique = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: dataValues,
+            backgroundColor: '#000091', // Bleu institutionnel
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              color: '#161616',
+              font: { weight: 'bold', size: 12 },
+              formatter: function(value) {
+                return value > 0 ? value : '';
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grace: '10%', // Laisse de l'espace en haut pour afficher l'étiquette
+              ticks: { precision: 0 }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>
