@@ -9,9 +9,10 @@
   <style>
     body {
       margin: 0;
-      padding: 16px;
+      padding: 12px;
       font-family: sans-serif;
       box-sizing: border-box;
+      background: #ffffff;
     }
     .chart-container {
       position: relative;
@@ -31,18 +32,45 @@
     let monGraphique = null;
 
     grist.ready({
-  columns: [
-    { name: "Categorie", title: "Colonne des catégories" },
-    { name: "Valeur", title: "Colonne des valeurs (ou count)" }
-  ],
-  requiredAccess: 'read table'
-});
+      columns: [
+        { name: "Categorie", title: "Colonne des catégories", optional: false },
+        { name: "Valeur", title: "Colonne des valeurs (ou count)", optional: false }
+      ],
+      requiredAccess: 'read table'
+    });
 
     grist.onRecords(function(records, mappings) {
       if (!records || records.length === 0) return;
 
-      const labels = records.map(r => r.Categorie || "Non défini");
-      const dataValues = records.map(r => r.Valeur || 0);
+      // Clés réelles mappées par Grist
+      const catKey = (mappings && mappings.Categorie) ? mappings.Categorie : 'Categorie';
+      const valKey = (mappings && mappings.Valeur) ? mappings.Valeur : 'Valeur';
+
+      const labels = records.map(r => {
+        // Recherche prioritaire : clé mappée, ou clé directe 'Categorie', ou première colonne qui n'est ni 'id' ni 'count'
+        let val = r[catKey] !== undefined ? r[catKey] : r.Categorie;
+
+        if (val === undefined || val === null || val === '') {
+          // Secours : on cherche la première valeur non numérique du record
+          for (let k of Object.keys(r)) {
+            if (k !== 'id' && k !== 'count' && k !== valKey && k !== 'group' && typeof r[k] === 'string') {
+              val = r[k];
+              break;
+            }
+          }
+        }
+
+        if (val === null || val === undefined || val === '') return "Sans libellé";
+        if (typeof val === 'object') {
+          return Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val));
+        }
+        return String(val);
+      });
+
+      const dataValues = records.map(r => {
+        let num = r[valKey] !== undefined ? r[valKey] : (r.Valeur !== undefined ? r.Valeur : r.count);
+        return Number(num) || 0;
+      });
 
       const ctx = document.getElementById('monGraphique').getContext('2d');
 
@@ -56,7 +84,7 @@
           labels: labels,
           datasets: [{
             data: dataValues,
-            backgroundColor: '#000091', // Bleu institutionnel
+            backgroundColor: '#000091',
             borderRadius: 4
           }]
         },
@@ -78,7 +106,7 @@
           scales: {
             y: {
               beginAtZero: true,
-              grace: '10%', // Laisse de l'espace en haut pour afficher l'étiquette
+              grace: '15%',
               ticks: { precision: 0 }
             },
             x: {
