@@ -31,12 +31,12 @@
     let monGraphique = null;
 
     grist.ready({
-      columns: [
-        { name: "Categorie", title: "Colonne des catégories", type: "Text" },
-        { name: "Valeur", title: "Colonne des valeurs (ou count)", type: "Numeric" }
-      ],
-      requiredAccess: 'read table'
-    });
+  columns: [
+    { name: "Categorie", title: "Colonne des catégories" },
+    { name: "Valeur", title: "Colonne des valeurs (ou count)" }
+  ],
+  requiredAccess: 'read table'
+});
 
     grist.onRecords(function(records, mappings) {
       if (!records || records.length === 0) return;
