@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page de Présentation et Navigation - Grist</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <!-- Bibliothèque légère pour le rendu Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+      color: #1e293b;
+      padding: 24px 32px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1050px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 28px 34px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      border: 1px solid #e2e8f0;
+    }
+
+    /* Barre supérieure d'édition */
+    .top-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 8px;
+    }
+
+    .edit-btn {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      color: #475569;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .edit-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    /* Rendu du texte Markdown */
+    .markdown-content h1 {
+      font-size: 24px;
+      color: #0f172a;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #2563eb;
+    }
+
+    .markdown-content h2 {
+      font-size: 17px;
+      color: #1e3a8a;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    .markdown-content p {
+      margin-bottom: 12px;
+      font-size: 15px;
+      color: #334155;
+    }
+
+    .markdown-content ul {
+      margin-left: 22px;
+      margin-bottom: 14px;
+    }
+
+    .markdown-content li {
+      margin-bottom: 6px;
+      font-size: 15px;
+      color: #334155;
+    }
+
+    .markdown-content hr {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 20px 0;
+    }
+
+    /* Zone d'édition directe */
+    .editor-box {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .editor-box.active {
+      display: flex;
+    }
+
+    .editor-textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: 12px;
+      border: 1px solid #94a3b8;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    .editor-controls {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .save-btn {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      padding: 7px 16px;
+      border-radius: 6px;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .save-btn:hover {
+      background: #1d4ed8;
+    }
+
+    /* Section des onglets / pages générés automatiquement */
+    .nav-section {
+      margin-top: 28px;
+      padding-top: 22px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .nav-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .nav-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #2563eb;
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-decoration: none;
+      color: #0f172a;
+      font-weight: 600;
+      font-size: 14.5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .nav-card:hover {
+      background: #eff6ff;
+      border-color: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.12);
+    }
+
+    .nav-arrow {
+      color: #2563eb;
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="top-actions">
+      <button class="edit-btn" id="toggleEditBtn">Modifier le texte</button>
+    </div>
+
+    <div class="editor-box" id="editorBox">
+      <textarea class="editor-textarea" id="markdownInput"></textarea>
+      <div class="editor-controls">
+        <button class="edit-btn" id="cancelEditBtn">Annuler</button>
+        <button class="save-btn" id="saveEditBtn">Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="markdown-content" id="markdownRender"></div>
+
+    <div class="nav-section" id="navSection" style="display: none;">
+      <div class="nav-title">Accéder directement aux rubriques</div>
+      <div class="nav-grid" id="navGrid"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentRecord = null;
+    let mappedColNames = {};
+
+    grist.ready({
+      requiredAccess: "full",
+      columns: [
+        { name: "Texte", title: "Contenu Markdown de présentation", type: "Text" }
+      ]
+    });
+
+    // Détection automatique des sous-pages (ou pages du document) via les tables système Grist
+    async function loadNavigationPages() {
+      try {
+        const pagesData = await grist.docApi.fetchTable("_grist_Pages");
+        const viewsData = await grist.docApi.fetchTable("_grist_Views");
+
+        // Construction de la liste structurée des pages
+        const pages = [];
+        for (let i = 0; i < pagesData.id.length; i++) {
+          const viewId = pagesData.viewRef[i];
+          const viewIdx = viewsData.id.indexOf(viewId);
+          const viewName = viewIdx !== -1 ? viewsData.name[viewIdx] : "";
+          // Ignorer les tables techniques masquées ou vues internes
+          if (!viewName || viewName.startsWith("_")) continue;
+
+          pages.push({
+            id: pagesData.id[i],
+            viewId: viewId,
+            name: viewName,
+            indentation: pagesData.indentation[i] || 0,
+            pagePos: pagesData.pagePos[i] || 0
+          });
+        }
+
+        // Tri selon l'ordre exact du menu latéral gauche de Grist
+        pages.sort((a, b) => a.pagePos - b.pagePos);
+
+        // Repérage de la page active dans l'URL parente pour n'afficher que ses sous-pages
+        let currentViewId = null;
+        try {
+          const match = window.parent.location.pathname.match(/\/p\/(\d+)/);
+          if (match) currentViewId = parseInt(match[1], 10);
+        } catch (e) {
+          // En cas de restriction cross-origin, on filtrera par indentation > 0
+        }
+
+        let targetPages = [];
+        if (currentViewId !== null) {
+          const currentIdx = pages.findIndex(p => p.viewId === currentViewId);
+          if (currentIdx !== -1) {
+            const parentIndent = pages[currentIdx].indentation;
+            // Récupérer toutes les sous-pages imbriquées juste sous la page courante
+            for (let j = currentIdx + 1; j < pages.length; j++) {
+              if (pages[j].indentation > parentIndent) {
+                targetPages.push(pages[j]);
+              } else {
+                break;
+              }
+            }
+          }
+        }
+
+        // Si aucune sous-page spécifique n'est détectée, prendre toutes les pages indentées (sous-pages)
+        if (targetPages.length === 0) {
+          targetPages = pages.filter(p => p.indentation > 0 && p.viewId !== currentViewId);
+        }
+
+        renderNavButtons(targetPages);
+      } catch (err) {
+        console.error("Impossible de charger l'arborescence des pages :", err);
+      }
+    }
+
+    function renderNavButtons(pagesList) {
+      const navSection = document.getElementById("navSection");
+      const navGrid = document.getElementById("navGrid");
+      navGrid.innerHTML = "";
+
+      if (!pagesList || pagesList.length === 0) {
+        navSection.style.display = "none";
+        return;
+      }
+
+      navSection.style.display = "block";
+
+      pagesList.forEach(page => {
+        const btn = document.createElement("button");
+        btn.className = "nav-card";
+        btn.innerHTML = `<span>${page.name}</span><span class="nav-arrow">→</span>`;
+        btn.addEventListener("click", () => {
+          navigateToPage(page.viewId);
+        });
+        navGrid.appendChild(btn);
+      });
+    }
+
+    // Navigation fluide vers la page sélectionnée dans Grist
+    function navigateToPage(viewId) {
+      try {
+        const parentUrl = new URL(window.parent.location.href);
+        parentUrl.pathname = parentUrl.pathname.replace(/\/p\/\d+.*$/, `/p/${viewId}`);
+        window.parent.location.href = parentUrl.toString();
+      } catch (e) {
+        // Solution de repli si le navigateur bloque l'accès direct au parent
+        const baseUrl = document.referrer ? document.referrer.replace(/\/p\/\d+.*$/, `/p/${viewId}`) : "";
+        if (baseUrl) window.top.location.href = baseUrl;
+      }
+    }
+
+    // Réception du texte Markdown depuis la table Grist
+    grist.onRecords((records, mappings) => {
+      mappedColNames = mappings || {};
+      if (records && records.length > 0) {
+        const mapped = grist.mapColumnNames(records[0], mappings) || {};
+        mapped.id = records[0].id;
+        currentRecord = mapped;
+        const rawText = mapped.Texte || "*Cliquez sur « Modifier le texte » en haut à droite pour saisir votre présentation.*";
+        document.getElementById("markdownRender").innerHTML = marked.parse(rawText);
+        document.getElementById("markdownInput").value = mapped.Texte || "";
+      }
+      loadNavigationPages();
+    });
+
+    // Gestion de l'éditeur intégré
+    const editorBox = document.getElementById("editorBox");
+    const markdownRender = document.getElementById("markdownRender");
+
+    document.getElementById("toggleEditBtn").addEventListener("click", () => {
+      editorBox.classList.add("active");
+      markdownRender.style.display = "none";
+    });
+
+    document.getElementById("cancelEditBtn").addEventListener("click", () => {
+      editorBox.classList.remove("active");
+      markdownRender.style.display = "block";
+    });
+
+    document.getElementById("saveEditBtn").addEventListener("click", async () => {
+      const newText = document.getElementById("markdownInput").value;
+      const targetCol = mappedColNames.Texte || "Texte";
+      if (currentRecord && currentRecord.id) {
+        await grist.selectedTable.update({
+          id: currentRecord.id,
+          fields: { [targetCol]: newText }
+        });
+      }
+      editorBox.classList.remove("active");
+      markdownRender.style.display = "block";
+    });
+  </script>
+</body>
+</html>
