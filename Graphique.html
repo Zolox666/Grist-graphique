@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Widget Graphiques Multiples Grist</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      color: #1e1e1e;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Barre supérieure avec les 2 boutons */
+    .top-bar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      height: 28px;
+    }
+
+    .btn-action {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+      background: #f8fafc;
+      color: #334155;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .btn-action:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+
+    .btn-save {
+      background: #000091;
+      color: #ffffff;
+      border-color: #000091;
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .btn-save:hover {
+      background: #1212ff;
+      border-color: #1212ff;
+    }
+
+    /* Panneaux rétractables */
+    .sub-panel {
+      display: none;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      z-index: 10;
+    }
+    .sub-panel.open {
+      display: block;
+    }
+
+    .panel-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    select {
+      font-size: 12px;
+      padding: 4px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      background-color: #ffffff;
+      color: #0f172a;
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus {
+      border-color: #000091;
+    }
+
+    /* Sélecteurs individuels de couleur */
+    #customColorsContainer {
+      display: none;
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 8px;
+      margin-top: 8px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    #customColorsContainer.show {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .color-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #ffffff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      font-size: 11px;
+    }
+    .color-item input[type="color"] {
+      width: 20px;
+      height: 20px;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      background: none;
+      border-radius: 3px;
+    }
+
+    .chart-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Boutons de commande -->
+  <div class="top-bar">
+    <button type="button" id="btnToggleFormat" class="btn-action">📊 Format</button>
+    <button type="button" id="btnToggleCouleurs" class="btn-action">🎨 Couleurs</button>
+  </div>
+
+  <!-- Volet Format -->
+  <div id="panelFormat" class="sub-panel">
+    <div class="panel-row">
+      <div class="control-group">
+        <label for="chartType">Type de graphique :</label>
+        <select id="chartType">
+          <option value="bar">Barres verticales</option>
+          <option value="horizontalBar">Barres horizontales</option>
+          <option value="pie">Camembert</option>
+          <option value="doughnut">Donut</option>
+          <option value="line">Courbe</option>
+        </select>
+      </div>
+      <button type="button" id="btnSaveFormat" class="btn-action btn-save">💾 Enregistrer et fermer</button>
+    </div>
+  </div>
+
+  <!-- Volet Couleurs -->
+  <div id="panelCouleurs" class="sub-panel">
+    <div class="panel-row">
+      <div class="control-group">
+        <label for="colorPalette">Palette :</label>
+        <select id="colorPalette">
+          <option value="custom">Personnalisée (barre par barre)</option>
+          <option value="red_to_green">Dégradé Rouge ➔ Vert (Performance)</option>
+          <option value="green_to_red">Dégradé Vert ➔ Rouge</option>
+          <option value="threshold_rg">Seuil Performance (Rouge / Vert)</option>
+          <option value="marianne">Bleu Institutionnel</option>
+          <option value="vibrant">Moderne (Multicolore)</option>
+          <option value="blues">Dégradé Bleu</option>
+          <option value="greens">Dégradé Vert</option>
+          <option value="warm">Tons Chauds</option>
+          <option value="pastel">Pastel</option>
+        </select>
+      </div>
+      <button type="button" id="btnSaveCouleurs" class="btn-action btn-save">💾 Enregistrer et fermer</button>
+    </div>
+    <!-- Liste détaillée barre par barre -->
+    <div id="customColorsContainer"></div>
+  </div>
+
+  <!-- Espace plein écran pour le graphique -->
+  <div class="chart-container">
+    <canvas id="monGraphique"></canvas>
+  </div>
+
+  <script>
+    Chart.register(ChartDataLabels);
+
+    let monGraphique = null;
+    let donneesActuelles = [];
+    let mappingsActuels = {};
+    let customColorMap = {};
+
+    const PALETTES = {
+      marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
+      vibrant: ['#000091', '#e1000f', '#008941', '#f59f00', '#6f42c1', '#17a2b8', '#e83e8c', '#fd7e14'],
+      blues: ['#002b66', '#0047ab', '#0066cc', '#3385ff', '#66a3ff', '#99c2ff', '#cce0ff'],
+      greens: ['#0e4429', '#006644', '#00875a', '#36b37e', '#57d9a3', '#79f2c0', '#abf5d1'],
+      warm: ['#8a1c14', '#c93b2b', '#e65100', '#f57c00', '#ff9800', '#ffb74d', '#ffe082'],
+      pastel: ['#93c5fd', '#86efac', '#fde047', '#fca5a5', '#d8b4fe', '#fdba74', '#a5f3fc']
+    };
+
+    grist.ready({
+      columns: [
+        { name: "Categorie", title: "Colonne des catégories", optional: false },
+        { name: "Valeur", title: "Colonne des valeurs (ou count)", optional: false }
+      ],
+      requiredAccess: 'read table'
+    });
+
+    grist.onRecords(function(records, mappings) {
+      donneesActuelles = records || [];
+      mappingsActuels = mappings || {};
+      mettreAJourSelecteurCouleurs();
+      rendreGraphique();
+    });
+
+    grist.onOptions(function(options) {
+      if (options) {
+        if (options.chartType) document.getElementById('chartType').value = options.chartType;
+        if (options.colorPalette) document.getElementById('colorPalette').value = options.colorPalette;
+        if (options.customColorMap) customColorMap = options.customColorMap;
+      }
+      mettreAJourSelecteurCouleurs();
+      rendreGraphique();
+    });
+
+    function sauvegarderPreferences() {
+      grist.setOption('chartType', document.getElementById('chartType').value);
+      grist.setOption('colorPalette', document.getElementById('colorPalette').value);
+      grist.setOption('customColorMap', customColorMap);
+    }
+
+    // Gestion de l'ouverture / fermeture des 2 boutons
+    const panelFormat = document.getElementById('panelFormat');
+    const panelCouleurs = document.getElementById('panelCouleurs');
+
+    document.getElementById('btnToggleFormat').addEventListener('click', () => {
+      panelCouleurs.classList.remove('open');
+      panelFormat.classList.toggle('open');
+    });
+
+    document.getElementById('btnToggleCouleurs').addEventListener('click', () => {
+      panelFormat.classList.remove('open');
+      panelCouleurs.classList.toggle('open');
+    });
+
+    document.getElementById('btnSaveFormat').addEventListener('click', () => {
+      sauvegarderPreferences();
+      panelFormat.classList.remove('open');
+    });
+
+    document.getElementById('btnSaveCouleurs').addEventListener('click', () => {
+      sauvegarderPreferences();
+      panelCouleurs.classList.remove('open');
+    });
+
+    document.getElementById('chartType').addEventListener('change', () => {
+      rendreGraphique();
+    });
+
+    document.getElementById('colorPalette').addEventListener('change', (e) => {
+      const container = document.getElementById('customColorsContainer');
+      if (e.target.value === 'custom') {
+        container.classList.add('show');
+      } else {
+        container.classList.remove('show');
+      }
+      rendreGraphique();
+    });
+
+    function interpolateColor(color1, color2, factor) {
+      const c1 = parseInt(color1.slice(1), 16);
+      const c2 = parseInt(color2.slice(1), 16);
+      const r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
+      const r2 = (c2 >> 16) & 255, g2 = (c2 >> 8) & 255, b2 = c2 & 255;
+      const r = Math.round(r1 + factor * (r2 - r1));
+      const g = Math.round(g1 + factor * (g2 - g1));
+      const b = Math.round(b1 + factor * (b2 - b1));
+      return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function extraireLabelsEtValeurs() {
+      const catKey = (mappingsActuels && mappingsActuels.Categorie) ? mappingsActuels.Categorie : 'Categorie';
+      const valKey = (mappingsActuels && mappingsActuels.Valeur) ? mappingsActuels.Valeur : 'Valeur';
+
+      const labels = donneesActuelles.map(r => {
+        let val = r[catKey] !== undefined ? r[catKey] : r.Categorie;
+        if (val === undefined || val === null || val === '') {
+          for (let k of Object.keys(r)) {
+            if (k !== 'id' && k !== 'count' && k !== valKey && k !== 'group' && typeof r[k] === 'string') {
+              val = r[k];
+              break;
+            }
+          }
+        }
+        if (val === null || val === undefined || val === '') return "Sans libellé";
+        if (typeof val === 'object') return Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val));
+        return String(val);
+      });
+
+      const values = donneesActuelles.map(r => {
+        let num = r[valKey] !== undefined ? r[valKey] : (r.Valeur !== undefined ? r.Valeur : r.count);
+        return Number(num) || 0;
+      });
+
+      return { labels, values };
+    }
+
+    function mettreAJourSelecteurCouleurs() {
+      const { labels } = extraireLabelsEtValeurs();
+      const container = document.getElementById('customColorsContainer');
+      container.innerHTML = '';
+
+      if (document.getElementById('colorPalette').value === 'custom') {
+        container.classList.add('show');
+      } else {
+        container.classList.remove('show');
+      }
+
+      labels.forEach((lbl, index) => {
+        const item = document.createElement('div');
+        item.className = 'color-item';
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = customColorMap[lbl] || (PALETTES.vibrant[index % PALETTES.vibrant.length]);
+
+        colorInput.addEventListener('change', (e) => {
+          customColorMap[lbl] = e.target.value;
+          rendreGraphique();
+        });
+
+        const span = document.createElement('span');
+        span.textContent = lbl;
+
+        item.appendChild(colorInput);
+        item.appendChild(span);
+        container.appendChild(item);
+      });
+    }
+
+    function calculerCouleurs(labels, values, paletteName) {
+      const count = labels.length;
+      const minVal = Math.min(...values);
+      const maxVal = Math.max(...values);
+      const range = (maxVal - minVal) === 0 ? 1 : (maxVal - minVal);
+      const avgVal = values.reduce((a, b) => a + b, 0) / (count || 1);
+
+      if (paletteName === 'custom') {
+        return labels.map((lbl, idx) => customColorMap[lbl] || PALETTES.vibrant[idx % PALETTES.vibrant.length]);
+      }
+      if (paletteName === 'threshold_rg') {
+        return values.map(v => v >= avgVal ? '#008941' : '#e1000f');
+      }
+      if (paletteName === 'red_to_green') {
+        return values.map(v => {
+          const factor = (v - minVal) / range;
+          return interpolateColor('#e1000f', '#008941', factor);
+        });
+      }
+      if (paletteName === 'green_to_red') {
+        return values.map(v => {
+          const factor = (v - minVal) / range;
+          return interpolateColor('#008941', '#e1000f', factor);
+        });
+      }
+
+      const base = PALETTES[paletteName] || PALETTES.marianne;
+      return labels.map((_, i) => base[i % base.length]);
+    }
+
+    function rendreGraphique() {
+      if (!donneesActuelles || donneesActuelles.length === 0) return;
+
+      const { labels, values } = extraireLabelsEtValeurs();
+      const selectedType = document.getElementById('chartType').value;
+      const selectedPalette = document.getElementById('colorPalette').value;
+      const colors = calculerCouleurs(labels, values, selectedPalette);
+
+      const isCircular = (selectedType === 'pie' || selectedType === 'doughnut');
+      const isHorizontal = (selectedType === 'horizontalBar');
+      const isLine = (selectedType === 'line');
+      const chartType = isHorizontal ? 'bar' : selectedType;
+
+      const dataset = {
+        data: values,
+        backgroundColor: colors,
+        borderColor: isLine ? colors[0] : (isCircular ? '#ffffff' : undefined),
+        borderWidth: isCircular ? 2 : (isLine ? 3 : 0),
+        borderRadius: (chartType === 'bar' && !isCircular) ? 4 : 0,
+        fill: isLine ? false : undefined,
+        tension: isLine ? 0.2 : undefined
+      };
+
+      const ctx = document.getElementById('monGraphique').getContext('2d');
+      if (monGraphique) monGraphique.destroy();
+
+      monGraphique = new Chart(ctx, {
+        type: chartType,
+        data: {
+          labels: labels,
+          datasets: [dataset]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: isHorizontal ? 'y' : 'x',
+          plugins: {
+            legend: {
+              display: isCircular,
+              position: 'bottom',
+              labels: { boxWidth: 12, font: { size: 11 } }
+            },
+            datalabels: {
+              anchor: isCircular ? 'center' : 'end',
+              align: isCircular ? 'center' : (isHorizontal ? 'right' : 'top'),
+              color: isCircular ? '#ffffff' : '#1e1e1e',
+              font: { weight: 'bold', size: 11 },
+              formatter: function(value) {
+                return value > 0 ? value : '';
+              }
+            }
+          },
+          scales: isCircular ? {} : {
+            x: {
+              grid: { display: isHorizontal },
+              ticks: { precision: 0 }
+            },
+            y: {
+              beginAtZero: true,
+              grace: isHorizontal ? 0 : '15%',
+              grid: { display: !isHorizontal },
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
