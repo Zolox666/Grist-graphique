@@ -49,7 +49,7 @@
     .color-filters {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       flex-wrap: wrap;
     }
 
@@ -57,7 +57,7 @@
       padding: 5px 12px;
       border: 1px solid #cbd5e1;
       background: #f8fafc;
-      border-radius: 20px;
+      border-radius: 6px;
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -70,23 +70,25 @@
       border-color: #1e293b;
     }
 
+    /* Boutons de filtre en forme de mini post-it */
     .filter-dot {
       width: 22px;
       height: 22px;
-      border-radius: 50%;
-      border: 2px solid rgba(0, 0, 0, 0.15);
+      border-radius: 2px 2px 7px 2px;
+      border: 1px solid rgba(0, 0, 0, 0.16);
+      box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.08);
       cursor: pointer;
       transition: transform 0.12s ease, box-shadow 0.12s ease;
     }
 
     .filter-dot:hover {
-      transform: scale(1.15);
+      transform: translateY(-2px);
     }
 
     .filter-dot.active {
-      transform: scale(1.2);
-      border: 2px solid #0f172a;
-      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #0f172a;
+      transform: translateY(-2px) scale(1.1);
+      border: 1.5px solid #0f172a;
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 3.5px #0f172a;
     }
 
     .counter {
@@ -120,37 +122,42 @@
       box-shadow: 4px 8px 16px rgba(0, 0, 0, 0.14);
     }
 
+    /* Séparation par trait continu */
     .postit-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
       padding-bottom: 8px;
-      border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.14);
     }
 
     .palette {
       display: flex;
-      gap: 5px;
+      gap: 6px;
       flex-wrap: wrap;
     }
 
+    /* Pastilles de sélection en forme de mini post-it */
     .swatch {
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      border: 1px solid rgba(0, 0, 0, 0.25);
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 2px 2px 5px 2px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.08);
       cursor: pointer;
       transition: transform 0.1s ease;
     }
 
     .swatch:hover {
-      transform: scale(1.25);
+      transform: translateY(-1.5px) scale(1.12);
     }
 
     .swatch.selected {
-      transform: scale(1.25);
-      border: 2px solid #0f172a;
+      transform: scale(1.15);
+      border: 1.5px solid #0f172a;
+      box-shadow: 0 0 0 1.5px #ffffff, 0 0 0 3px #0f172a;
     }
 
     .postit-body {
@@ -161,10 +168,11 @@
       flex-grow: 1;
     }
 
+    /* Pied de carte avec trait continu */
     .postit-footer {
       margin-top: 14px;
       padding-top: 8px;
-      border-top: 1px dashed rgba(0, 0, 0, 0.12);
+      border-top: 1px solid rgba(0, 0, 0, 0.14);
       font-size: 12px;
       color: #475569;
       display: flex;
@@ -181,7 +189,6 @@
       font-style: italic;
     }
 
-    /* Notification de sauvegarde */
     .toast {
       position: fixed;
       bottom: 16px;
@@ -271,7 +278,8 @@
     COLORS.forEach(c => {
       const dot = document.createElement("button");
       dot.className = "filter-dot";
-      dot.style.backgroundColor = c.border;
+      dot.style.backgroundColor = c.bg;
+      dot.style.borderTop = `4px solid ${c.border}`;
       dot.title = `Filtrer : ${c.name}`;
       dot.dataset.colorId = c.id;
       dot.addEventListener("click", () => {
@@ -301,7 +309,6 @@
         .replace(/"/g, "&quot;");
     }
 
-    // Sauvegarde via l'API native grist.selectedTable.update (plus fiable)
     async function saveColor(rowId, newColorId) {
       const targetCol = mappedColNames.Couleur || "Couleur_PostIt";
       try {
@@ -366,11 +373,11 @@
         COLORS.forEach(c => {
           const swatch = document.createElement("span");
           swatch.className = "swatch" + (c.id === activeColor.id ? " selected" : "");
-          swatch.style.backgroundColor = c.border;
+          swatch.style.backgroundColor = c.bg;
+          swatch.style.borderTop = `3px solid ${c.border}`;
           swatch.title = c.name;
           swatch.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Mise à jour en mémoire locale immédiate + sauvegarde Grist
             rec.Couleur = c.id;
             card.style.backgroundColor = c.bg;
             card.style.borderTop = `6px solid ${c.border}`;
@@ -410,7 +417,6 @@
 
     grist.onRecords((records, mappings) => {
       mappedColNames = mappings || {};
-      // Conserve l'id de ligne Grist tout en mappant les colonnes
       allRecords = (records || []).map(r => {
         const mapped = grist.mapColumnNames(r, mappings) || {};
         mapped.id = r.id;
