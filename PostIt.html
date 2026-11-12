@@ -3,23 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mur de Post-it Usagers - Grist</title>
+  <title>Mur de Post-it Interactif - Grist</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   <style>
-    :root {
-      --bg-page: #f4f6f9;
-      --text-main: #1e293b;
-      --text-muted: #64748b;
-      --yellow-bg: #fef9c3;
-      --yellow-border: #fde047;
-      --green-bg: #dcfce7;
-      --green-border: #86efac;
-      --red-bg: #fee2e2;
-      --red-border: #fca5a5;
-      --blue-bg: #e0f2fe;
-      --blue-border: #7dd3fc;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -28,8 +14,8 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg-page);
-      color: var(--text-main);
+      background-color: #f4f6f9;
+      color: #1e293b;
       padding: 16px;
     }
 
@@ -37,7 +23,7 @@
     .toolbar {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 12px;
       align-items: center;
       justify-content: space-between;
       margin-bottom: 18px;
@@ -49,7 +35,7 @@
 
     .search-box {
       flex: 1;
-      min-width: 200px;
+      min-width: 220px;
       padding: 7px 12px;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
@@ -61,95 +47,113 @@
       border-color: #2563eb;
     }
 
-    .filters {
+    .color-filters {
       display: flex;
+      align-items: center;
       gap: 6px;
       flex-wrap: wrap;
     }
 
-    .filter-btn {
-      padding: 6px 12px;
+    .filter-all-btn {
+      padding: 5px 12px;
       border: 1px solid #cbd5e1;
       background: #f8fafc;
       border-radius: 20px;
       font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
-    .filter-btn.active {
+    .filter-all-btn.active {
       background: #1e293b;
       color: #ffffff;
       border-color: #1e293b;
     }
 
-    .counter {
-      font-size: 13px;
-      color: var(--text-muted);
-      font-weight: 500;
+    .filter-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 0, 0, 0.15);
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
     }
 
-    /* Grille de tuiles / Post-it */
+    .filter-dot:hover {
+      transform: scale(1.15);
+    }
+
+    .filter-dot.active {
+      transform: scale(1.2);
+      border: 2px solid #0f172a;
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #0f172a;
+    }
+
+    .counter {
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    /* Grille de Post-it */
     .board {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
       gap: 18px;
       align-items: start;
     }
 
     .postit {
       position: relative;
-      background-color: var(--yellow-bg);
-      border-top: 6px solid var(--yellow-border);
-      border-radius: 4px 4px 12px 4px;
-      padding: 16px 18px 18px 18px;
+      border-radius: 4px 4px 14px 4px;
+      padding: 12px 16px 16px 16px;
       box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.09);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: 150px;
+      min-height: 165px;
       word-break: break-word;
     }
 
     .postit:hover {
-      transform: translateY(-3px) rotate(-0.5deg);
+      transform: translateY(-3px);
       box-shadow: 4px 8px 16px rgba(0, 0, 0, 0.14);
     }
 
-    /* Variantes de couleurs selon le ressenti / catégorie */
-    .postit.positif {
-      background-color: var(--green-bg);
-      border-top-color: var(--green-border);
-    }
-
-    .postit.negatif {
-      background-color: var(--red-bg);
-      border-top-color: var(--red-border);
-    }
-
-    .postit.suggestion {
-      background-color: var(--blue-bg);
-      border-top-color: var(--blue-border);
-    }
-
-    .postit-header {
+    /* En-tête du post-it avec palette de sélection */
+    .postit-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
-      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
     }
 
-    .badge {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: rgba(0, 0, 0, 0.06);
-      color: #334155;
+    .palette {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .swatch {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    .swatch:hover {
+      transform: scale(1.25);
+    }
+
+    .swatch.selected {
+      transform: scale(1.25);
+      border: 2px solid #0f172a;
     }
 
     .postit-body {
@@ -169,13 +173,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      font-weight: 500;
     }
 
     .empty-state {
       grid-column: 1 / -1;
       text-align: center;
       padding: 40px;
-      color: var(--text-muted);
+      color: #64748b;
       font-style: italic;
     }
   </style>
@@ -183,12 +188,10 @@
 <body>
 
   <div class="toolbar">
-    <input type="text" id="searchInput" class="search-box" placeholder="Rechercher un mot-clé dans les retours..." />
-    <div class="filters" id="filterButtons">
-      <button class="filter-btn active" data-filter="ALL">Tous</button>
-      <button class="filter-btn" data-filter="positif">Positifs</button>
-      <button class="filter-btn" data-filter="negatif">Négatifs</button>
-      <button class="filter-btn" data-filter="suggestion">Suggestions</button>
+    <input type="text" id="searchInput" class="search-box" placeholder="Rechercher un mot-clé..." />
+    <div class="color-filters" id="colorFilters">
+      <button class="filter-all-btn active" id="btnAll">Toutes les couleurs</button>
+      <!-- Les 10 pastilles de filtre sont générées automatiquement ici -->
     </div>
     <span class="counter" id="counter">0 retour</span>
   </div>
@@ -196,35 +199,69 @@
   <div class="board" id="board"></div>
 
   <script>
+    // Définition des 10 couleurs pastel harmonieuses
+    const COLORS = [
+      { id: "jaune",     name: "Jaune classique (À trier)", bg: "#fef9c3", border: "#eab308" },
+      { id: "vert",      name: "Vert (Retour positif)",      bg: "#dcfce7", border: "#22c55e" },
+      { id: "bleu",      name: "Bleu ciel (Suggestion)",     bg: "#e0f2fe", border: "#0284c7" },
+      { id: "corail",    name: "Rose / Corail (Point noir)", bg: "#fee2e2", border: "#ef4444" },
+      { id: "lavande",   name: "Lavande (Accueil / Humain)", bg: "#f3e8ff", border: "#a855f7" },
+      { id: "pechen",    name: "Pêche / Orange (Délais)",    bg: "#ffedd5", border: "#f97316" },
+      { id: "menthe",    name: "Menthe (Site / Numérique)",  bg: "#ccfbf1", border: "#14b8a6" },
+      { id: "rose",      name: "Rose poudré (Rendez-vous)",  bg: "#fce7f3", border: "#ec4899" },
+      { id: "indigo",    name: "Indigo doux (Organisation)", bg: "#e0e7ff", border: "#6366f1" },
+      { id: "gris",      name: "Gris perle (Divers / Autre)", bg: "#f1f5f9", border: "#64748b" }
+    ];
+
     let allRecords = [];
-    let currentFilter = "ALL";
+    let mappedColNames = {};
+    let currentColorFilter = "ALL";
     let searchTerm = "";
 
-    // Déclaration des colonnes mappables dans le panneau Créateur de Grist
+    // Initialisation avec droit d'écriture ("full") pour sauvegarder la couleur choisie dans Grist
     grist.ready({
-      requiredAccess: 'read table',
+      requiredAccess: "full",
       columns: [
-        { name: 'Contenu', title: 'Texte du retour / suggestion', type: 'Text' },
-        { name: 'Profil', title: 'Profil usager ou sous-titre', optional: true },
-        { name: 'Ressenti', title: 'Catégorie / Ressenti (Positif, Négatif, Suggestion)', optional: true },
-        { name: 'Date', title: 'Date ou référence', optional: true }
+        { name: "Contenu", title: "Texte du retour / suggestion", type: "Text" },
+        { name: "Couleur", title: "Colonne de sauvegarde de couleur", type: "Text", optional: true },
+        { name: "Profil",  title: "Profil usager (sous-titre)", optional: true },
+        { name: "Date",    title: "Date ou référence", optional: true }
       ]
     });
 
-    // Détection automatique de la couleur selon le texte de la colonne Ressenti
-    function detectStyleClass(ressentiVal) {
-      if (!ressentiVal) return "";
-      const val = String(ressentiVal).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (val.includes("positif") || val.includes("satisfait") || val.includes("felicitation") || val.includes("bien")) {
-        return "positif";
-      }
-      if (val.includes("negatif") || val.includes("insatisfait") || val.includes("probleme") || val.includes("reclamation") || val.includes("attente")) {
-        return "negatif";
-      }
-      if (val.includes("suggestion") || val.includes("amelioration") || val.includes("idee")) {
-        return "suggestion";
-      }
-      return "";
+    // Construction des pastilles de filtre dans la barre supérieure
+    const filterContainer = document.getElementById("colorFilters");
+    const btnAll = document.getElementById("btnAll");
+
+    btnAll.addEventListener("click", () => {
+      currentColorFilter = "ALL";
+      updateFilterUI();
+      renderBoard();
+    });
+
+    COLORS.forEach(c => {
+      const dot = document.createElement("button");
+      dot.className = "filter-dot";
+      dot.style.backgroundColor = c.border;
+      dot.title = `Filtrer : ${c.name}`;
+      dot.dataset.colorId = c.id;
+      dot.addEventListener("click", () => {
+        currentColorFilter = (currentColorFilter === c.id) ? "ALL" : c.id;
+        updateFilterUI();
+        renderBoard();
+      });
+      filterContainer.appendChild(dot);
+    });
+
+    function updateFilterUI() {
+      btnAll.classList.toggle("active", currentColorFilter === "ALL");
+      document.querySelectorAll(".filter-dot").forEach(dot => {
+        dot.classList.toggle("active", dot.dataset.colorId === currentColorFilter);
+      });
+    }
+
+    function getColorObj(colorId) {
+      return COLORS.find(c => c.id === colorId) || COLORS[0]; // Jaune par défaut
     }
 
     function escapeHTML(str) {
@@ -235,25 +272,38 @@
         .replace(/"/g, "&quot;");
     }
 
+    // Sauvegarde de la couleur choisie dans Grist
+    async function saveColor(rowId, newColorId) {
+      if (!mappedColNames.Couleur) {
+        alert("Veuillez relier la colonne 'Couleur_PostIt' dans le panneau Créateur de Grist (à droite) pour enregistrer les couleurs.");
+        return;
+      }
+      try {
+        await grist.docApi.applyUserActions([
+          ["UpdateRecord", await grist.selectedTable.getTableId(), rowId, {
+            [mappedColNames.Couleur]: newColorId
+          }]
+        ]);
+      } catch (err) {
+        console.error("Erreur de sauvegarde de la couleur :", err);
+      }
+    }
+
     function renderBoard() {
       const board = document.getElementById("board");
       const counter = document.getElementById("counter");
       board.innerHTML = "";
 
       const filtered = allRecords.filter(rec => {
-        // Ignorer les enregistrements où le texte principal est vide
         if (!rec.Contenu || String(rec.Contenu).trim() === "") return false;
 
-        const styleClass = detectStyleClass(rec.Ressenti);
-
-        // Filtre par bouton catégorie
-        if (currentFilter !== "ALL" && styleClass !== currentFilter) {
+        const activeColorId = rec.Couleur && COLORS.some(c => c.id === rec.Couleur) ? rec.Couleur : "jaune";
+        if (currentColorFilter !== "ALL" && activeColorId !== currentColorFilter) {
           return false;
         }
 
-        // Filtre par recherche texte
         if (searchTerm) {
-          const fullText = `${rec.Contenu} ${rec.Profil || ""} ${rec.Ressenti || ""}`.toLowerCase();
+          const fullText = `${rec.Contenu} ${rec.Profil || ""}`.toLowerCase();
           if (!fullText.includes(searchTerm)) return false;
         }
 
@@ -263,67 +313,79 @@
       counter.textContent = `${filtered.length} retour${filtered.length > 1 ? "s" : ""}`;
 
       if (filtered.length === 0) {
-        board.innerHTML = `<div class="empty-state">Aucun retour usager à afficher pour ce filtre.</div>`;
+        board.innerHTML = `<div class="empty-state">Aucun retour usager ne correspond à cette sélection.</div>`;
         return;
       }
 
       filtered.forEach(rec => {
-        const styleClass = detectStyleClass(rec.Ressenti);
+        const activeColor = getColorObj(rec.Couleur);
         const card = document.createElement("div");
-        card.className = `postit ${styleClass}`;
+        card.className = "postit";
+        card.style.backgroundColor = activeColor.bg;
+        card.style.borderTop = `6px solid ${activeColor.border}`;
 
-        const badgeLabel = rec.Ressenti ? escapeHTML(rec.Ressenti) : "Retour usager";
-        const profilLabel = rec.Profil ? escapeHTML(rec.Profil) : "";
+        // Création de la barre supérieure avec les 10 pastilles cliquables
+        const topBar = document.createElement("div");
+        topBar.className = "postit-top";
+
+        const palette = document.createElement("div");
+        palette.className = "palette";
+
+        COLORS.forEach(c => {
+          const swatch = document.createElement("span");
+          swatch.className = "swatch" + (c.id === activeColor.id ? " selected" : "");
+          swatch.style.backgroundColor = c.border;
+          swatch.title = c.name;
+          swatch.addEventListener("click", (e) => {
+            e.stopPropagation();
+            // Changement visuel immédiat + sauvegarde dans Grist
+            card.style.backgroundColor = c.bg;
+            card.style.borderTop = `6px solid ${c.border}`;
+            palette.querySelectorAll(".swatch").forEach(s => s.classList.remove("selected"));
+            swatch.classList.add("selected");
+            saveColor(rec.id, c.id);
+          });
+          palette.appendChild(swatch);
+        });
+
+        topBar.appendChild(palette);
+        card.appendChild(topBar);
+
+        // Corps du message usager
+        const body = document.createElement("div");
+        body.className = "postit-body";
+        body.textContent = rec.Contenu;
+        card.appendChild(body);
+
+        // Pied de carte (Profil + Date)
+        const profilLabel = rec.Profil ? String(rec.Profil) : "";
         let dateLabel = "";
         if (rec.Date) {
           dateLabel = rec.Date instanceof Date
             ? rec.Date.toLocaleDateString("fr-FR")
-            : escapeHTML(rec.Date);
+            : String(rec.Date);
         }
 
-        card.innerHTML = `
-          <div>
-            <div class="postit-header">
-              <span class="badge">${badgeLabel}</span>
-            </div>
-            <div class="postit-body">${escapeHTML(rec.Contenu)}</div>
-          </div>
-          ${(profilLabel || dateLabel) ? `
-          <div class="postit-footer">
-            <span>${profilLabel}</span>
-            <span>${dateLabel}</span>
-          </div>` : ""}
-        `;
-
-        // Permet de sélectionner la ligne correspondante dans Grist au clic sur le post-it
-        card.addEventListener("click", () => {
-          if (rec.id) grist.setCursorPos({ rowId: rec.id });
-        });
+        if (profilLabel || dateLabel) {
+          const footer = document.createElement("div");
+          footer.className = "postit-footer";
+          footer.innerHTML = `<span>${escapeHTML(profilLabel)}</span><span>${escapeHTML(dateLabel)}</span>`;
+          card.appendChild(footer);
+        }
 
         board.appendChild(card);
       });
     }
 
-    // Écoute des données envoyées par Grist
-    grist.onRecords(records => {
-      allRecords = grist.mapColumnNames(records) || [];
+    grist.onRecords((records, mappings) => {
+      mappedColNames = mappings || {};
+      allRecords = grist.mapColumnNames(records, mappings) || [];
       renderBoard();
     });
 
-    // Gestion de la recherche
     document.getElementById("searchInput").addEventListener("input", e => {
       searchTerm = e.target.value.trim().toLowerCase();
       renderBoard();
-    });
-
-    // Gestion des boutons de filtre
-    document.querySelectorAll(".filter-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        currentFilter = btn.dataset.filter;
-        renderBoard();
-      });
     });
   </script>
 </body>
