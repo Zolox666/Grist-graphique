@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mur de Post-it Usagers - Grist</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    :root {
+      --bg-page: #f4f6f9;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --yellow-bg: #fef9c3;
+      --yellow-border: #fde047;
+      --green-bg: #dcfce7;
+      --green-border: #86efac;
+      --red-bg: #fee2e2;
+      --red-border: #fca5a5;
+      --blue-bg: #e0f2fe;
+      --blue-border: #7dd3fc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      padding: 16px;
+    }
+
+    /* Barre d'outils supérieure */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      background: #ffffff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 200px;
+      padding: 7px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search-box:focus {
+      border-color: #2563eb;
+    }
+
+    .filters {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-btn.active {
+      background: #1e293b;
+      color: #ffffff;
+      border-color: #1e293b;
+    }
+
+    .counter {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Grille de tuiles / Post-it */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .postit {
+      position: relative;
+      background-color: var(--yellow-bg);
+      border-top: 6px solid var(--yellow-border);
+      border-radius: 4px 4px 12px 4px;
+      padding: 16px 18px 18px 18px;
+      box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.09);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 150px;
+      word-break: break-word;
+    }
+
+    .postit:hover {
+      transform: translateY(-3px) rotate(-0.5deg);
+      box-shadow: 4px 8px 16px rgba(0, 0, 0, 0.14);
+    }
+
+    /* Variantes de couleurs selon le ressenti / catégorie */
+    .postit.positif {
+      background-color: var(--green-bg);
+      border-top-color: var(--green-border);
+    }
+
+    .postit.negatif {
+      background-color: var(--red-bg);
+      border-top-color: var(--red-border);
+    }
+
+    .postit.suggestion {
+      background-color: var(--blue-bg);
+      border-top-color: var(--blue-border);
+    }
+
+    .postit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.06);
+      color: #334155;
+    }
+
+    .postit-body {
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: #1e293b;
+      white-space: pre-line;
+      flex-grow: 1;
+    }
+
+    .postit-footer {
+      margin-top: 14px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(0, 0, 0, 0.12);
+      font-size: 12px;
+      color: #475569;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <input type="text" id="searchInput" class="search-box" placeholder="Rechercher un mot-clé dans les retours..." />
+    <div class="filters" id="filterButtons">
+      <button class="filter-btn active" data-filter="ALL">Tous</button>
+      <button class="filter-btn" data-filter="positif">Positifs</button>
+      <button class="filter-btn" data-filter="negatif">Négatifs</button>
+      <button class="filter-btn" data-filter="suggestion">Suggestions</button>
+    </div>
+    <span class="counter" id="counter">0 retour</span>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <script>
+    let allRecords = [];
+    let currentFilter = "ALL";
+    let searchTerm = "";
+
+    // Déclaration des colonnes mappables dans le panneau Créateur de Grist
+    grist.ready({
+      requiredAccess: 'read table',
+      columns: [
+        { name: 'Contenu', title: 'Texte du retour / suggestion', type: 'Text' },
+        { name: 'Profil', title: 'Profil usager ou sous-titre', optional: true },
+        { name: 'Ressenti', title: 'Catégorie / Ressenti (Positif, Négatif, Suggestion)', optional: true },
+        { name: 'Date', title: 'Date ou référence', optional: true }
+      ]
+    });
+
+    // Détection automatique de la couleur selon le texte de la colonne Ressenti
+    function detectStyleClass(ressentiVal) {
+      if (!ressentiVal) return "";
+      const val = String(ressentiVal).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (val.includes("positif") || val.includes("satisfait") || val.includes("felicitation") || val.includes("bien")) {
+        return "positif";
+      }
+      if (val.includes("negatif") || val.includes("insatisfait") || val.includes("probleme") || val.includes("reclamation") || val.includes("attente")) {
+        return "negatif";
+      }
+      if (val.includes("suggestion") || val.includes("amelioration") || val.includes("idee")) {
+        return "suggestion";
+      }
+      return "";
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderBoard() {
+      const board = document.getElementById("board");
+      const counter = document.getElementById("counter");
+      board.innerHTML = "";
+
+      const filtered = allRecords.filter(rec => {
+        // Ignorer les enregistrements où le texte principal est vide
+        if (!rec.Contenu || String(rec.Contenu).trim() === "") return false;
+
+        const styleClass = detectStyleClass(rec.Ressenti);
+
+        // Filtre par bouton catégorie
+        if (currentFilter !== "ALL" && styleClass !== currentFilter) {
+          return false;
+        }
+
+        // Filtre par recherche texte
+        if (searchTerm) {
+          const fullText = `${rec.Contenu} ${rec.Profil || ""} ${rec.Ressenti || ""}`.toLowerCase();
+          if (!fullText.includes(searchTerm)) return false;
+        }
+
+        return true;
+      });
+
+      counter.textContent = `${filtered.length} retour${filtered.length > 1 ? "s" : ""}`;
+
+      if (filtered.length === 0) {
+        board.innerHTML = `<div class="empty-state">Aucun retour usager à afficher pour ce filtre.</div>`;
+        return;
+      }
+
+      filtered.forEach(rec => {
+        const styleClass = detectStyleClass(rec.Ressenti);
+        const card = document.createElement("div");
+        card.className = `postit ${styleClass}`;
+
+        const badgeLabel = rec.Ressenti ? escapeHTML(rec.Ressenti) : "Retour usager";
+        const profilLabel = rec.Profil ? escapeHTML(rec.Profil) : "";
+        let dateLabel = "";
+        if (rec.Date) {
+          dateLabel = rec.Date instanceof Date
+            ? rec.Date.toLocaleDateString("fr-FR")
+            : escapeHTML(rec.Date);
+        }
+
+        card.innerHTML = `
+          <div>
+            <div class="postit-header">
+              <span class="badge">${badgeLabel}</span>
+            </div>
+            <div class="postit-body">${escapeHTML(rec.Contenu)}</div>
+          </div>
+          ${(profilLabel || dateLabel) ? `
+          <div class="postit-footer">
+            <span>${profilLabel}</span>
+            <span>${dateLabel}</span>
+          </div>` : ""}
+        `;
+
+        // Permet de sélectionner la ligne correspondante dans Grist au clic sur le post-it
+        card.addEventListener("click", () => {
+          if (rec.id) grist.setCursorPos({ rowId: rec.id });
+        });
+
+        board.appendChild(card);
+      });
+    }
+
+    // Écoute des données envoyées par Grist
+    grist.onRecords(records => {
+      allRecords = grist.mapColumnNames(records) || [];
+      renderBoard();
+    });
+
+    // Gestion de la recherche
+    document.getElementById("searchInput").addEventListener("input", e => {
+      searchTerm = e.target.value.trim().toLowerCase();
+      renderBoard();
+    });
+
+    // Gestion des boutons de filtre
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentFilter = btn.dataset.filter;
+        renderBoard();
+      });
+    });
+  </script>
+</body>
+</html>
