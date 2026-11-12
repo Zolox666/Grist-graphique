@@ -19,7 +19,6 @@
       padding: 16px;
     }
 
-    /* Barre d'outils supérieure */
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -96,7 +95,6 @@
       font-weight: 600;
     }
 
-    /* Grille de Post-it */
     .board {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
@@ -122,7 +120,6 @@
       box-shadow: 4px 8px 16px rgba(0, 0, 0, 0.14);
     }
 
-    /* En-tête du post-it avec palette de sélection */
     .postit-top {
       display: flex;
       justify-content: space-between;
@@ -183,6 +180,30 @@
       color: #64748b;
       font-style: italic;
     }
+
+    /* Notification de sauvegarde */
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: #1e293b;
+      color: #ffffff;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+    .toast.error {
+      background: #dc2626;
+    }
   </style>
 </head>
 <body>
@@ -191,34 +212,33 @@
     <input type="text" id="searchInput" class="search-box" placeholder="Rechercher un mot-clé..." />
     <div class="color-filters" id="colorFilters">
       <button class="filter-all-btn active" id="btnAll">Toutes les couleurs</button>
-      <!-- Les 10 pastilles de filtre sont générées automatiquement ici -->
     </div>
     <span class="counter" id="counter">0 retour</span>
   </div>
 
   <div class="board" id="board"></div>
+  <div class="toast" id="toast">Couleur enregistrée</div>
 
   <script>
-    // Définition des 10 couleurs pastel harmonieuses
     const COLORS = [
-      { id: "jaune",     name: "Jaune classique (À trier)", bg: "#fef9c3", border: "#eab308" },
-      { id: "vert",      name: "Vert (Retour positif)",      bg: "#dcfce7", border: "#22c55e" },
-      { id: "bleu",      name: "Bleu ciel (Suggestion)",     bg: "#e0f2fe", border: "#0284c7" },
-      { id: "corail",    name: "Rose / Corail (Point noir)", bg: "#fee2e2", border: "#ef4444" },
-      { id: "lavande",   name: "Lavande (Accueil / Humain)", bg: "#f3e8ff", border: "#a855f7" },
-      { id: "pechen",    name: "Pêche / Orange (Délais)",    bg: "#ffedd5", border: "#f97316" },
-      { id: "menthe",    name: "Menthe (Site / Numérique)",  bg: "#ccfbf1", border: "#14b8a6" },
-      { id: "rose",      name: "Rose poudré (Rendez-vous)",  bg: "#fce7f3", border: "#ec4899" },
-      { id: "indigo",    name: "Indigo doux (Organisation)", bg: "#e0e7ff", border: "#6366f1" },
-      { id: "gris",      name: "Gris perle (Divers / Autre)", bg: "#f1f5f9", border: "#64748b" }
+      { id: "jaune",   name: "Jaune classique (À trier)", bg: "#fef9c3", border: "#eab308" },
+      { id: "vert",    name: "Vert (Retour positif)",      bg: "#dcfce7", border: "#22c55e" },
+      { id: "bleu",    name: "Bleu ciel (Suggestion)",     bg: "#e0f2fe", border: "#0284c7" },
+      { id: "corail",  name: "Rose / Corail (Point noir)", bg: "#fee2e2", border: "#ef4444" },
+      { id: "lavande", name: "Lavande (Accueil / Humain)", bg: "#f3e8ff", border: "#a855f7" },
+      { id: "pechen",  name: "Pêche / Orange (Délais)",    bg: "#ffedd5", border: "#f97316" },
+      { id: "menthe",  name: "Menthe (Site / Numérique)",  bg: "#ccfbf1", border: "#14b8a6" },
+      { id: "rose",    name: "Rose poudré (Rendez-vous)",  bg: "#fce7f3", border: "#ec4899" },
+      { id: "indigo",  name: "Indigo doux (Organisation)", bg: "#e0e7ff", border: "#6366f1" },
+      { id: "gris",    name: "Gris perle (Divers / Autre)", bg: "#f1f5f9", border: "#64748b" }
     ];
 
     let allRecords = [];
     let mappedColNames = {};
     let currentColorFilter = "ALL";
     let searchTerm = "";
+    let toastTimeout = null;
 
-    // Initialisation avec droit d'écriture ("full") pour sauvegarder la couleur choisie dans Grist
     grist.ready({
       requiredAccess: "full",
       columns: [
@@ -229,7 +249,16 @@
       ]
     });
 
-    // Construction des pastilles de filtre dans la barre supérieure
+    function showToast(message, isError = false) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.className = "toast show" + (isError ? " error" : "");
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove("show");
+      }, 2000);
+    }
+
     const filterContainer = document.getElementById("colorFilters");
     const btnAll = document.getElementById("btnAll");
 
@@ -261,7 +290,7 @@
     }
 
     function getColorObj(colorId) {
-      return COLORS.find(c => c.id === colorId) || COLORS[0]; // Jaune par défaut
+      return COLORS.find(c => c.id === colorId) || COLORS[0];
     }
 
     function escapeHTML(str) {
@@ -272,20 +301,20 @@
         .replace(/"/g, "&quot;");
     }
 
-    // Sauvegarde de la couleur choisie dans Grist
+    // Sauvegarde via l'API native grist.selectedTable.update (plus fiable)
     async function saveColor(rowId, newColorId) {
-      if (!mappedColNames.Couleur) {
-        alert("Veuillez relier la colonne 'Couleur_PostIt' dans le panneau Créateur de Grist (à droite) pour enregistrer les couleurs.");
-        return;
-      }
+      const targetCol = mappedColNames.Couleur || "Couleur_PostIt";
       try {
-        await grist.docApi.applyUserActions([
-          ["UpdateRecord", await grist.selectedTable.getTableId(), rowId, {
-            [mappedColNames.Couleur]: newColorId
-          }]
-        ]);
+        await grist.selectedTable.update({
+          id: rowId,
+          fields: {
+            [targetCol]: newColorId
+          }
+        });
+        showToast("Couleur enregistrée ✓");
       } catch (err) {
-        console.error("Erreur de sauvegarde de la couleur :", err);
+        console.error("Erreur sauvegarde :", err);
+        showToast("Erreur : vérifiez l'accès complet et la colonne Couleur_PostIt", true);
       }
     }
 
@@ -297,7 +326,9 @@
       const filtered = allRecords.filter(rec => {
         if (!rec.Contenu || String(rec.Contenu).trim() === "") return false;
 
-        const activeColorId = rec.Couleur && COLORS.some(c => c.id === rec.Couleur) ? rec.Couleur : "jaune";
+        const savedVal = rec.Couleur ? String(rec.Couleur).trim().toLowerCase() : "";
+        const activeColorId = COLORS.some(c => c.id === savedVal) ? savedVal : "jaune";
+
         if (currentColorFilter !== "ALL" && activeColorId !== currentColorFilter) {
           return false;
         }
@@ -318,13 +349,14 @@
       }
 
       filtered.forEach(rec => {
-        const activeColor = getColorObj(rec.Couleur);
+        const savedVal = rec.Couleur ? String(rec.Couleur).trim().toLowerCase() : "";
+        const activeColor = getColorObj(savedVal);
+
         const card = document.createElement("div");
         card.className = "postit";
         card.style.backgroundColor = activeColor.bg;
         card.style.borderTop = `6px solid ${activeColor.border}`;
 
-        // Création de la barre supérieure avec les 10 pastilles cliquables
         const topBar = document.createElement("div");
         topBar.className = "postit-top";
 
@@ -338,7 +370,8 @@
           swatch.title = c.name;
           swatch.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Changement visuel immédiat + sauvegarde dans Grist
+            // Mise à jour en mémoire locale immédiate + sauvegarde Grist
+            rec.Couleur = c.id;
             card.style.backgroundColor = c.bg;
             card.style.borderTop = `6px solid ${c.border}`;
             palette.querySelectorAll(".swatch").forEach(s => s.classList.remove("selected"));
@@ -351,13 +384,11 @@
         topBar.appendChild(palette);
         card.appendChild(topBar);
 
-        // Corps du message usager
         const body = document.createElement("div");
         body.className = "postit-body";
         body.textContent = rec.Contenu;
         card.appendChild(body);
 
-        // Pied de carte (Profil + Date)
         const profilLabel = rec.Profil ? String(rec.Profil) : "";
         let dateLabel = "";
         if (rec.Date) {
@@ -379,7 +410,12 @@
 
     grist.onRecords((records, mappings) => {
       mappedColNames = mappings || {};
-      allRecords = grist.mapColumnNames(records, mappings) || [];
+      // Conserve l'id de ligne Grist tout en mappant les colonnes
+      allRecords = (records || []).map(r => {
+        const mapped = grist.mapColumnNames(r, mappings) || {};
+        mapped.id = r.id;
+        return mapped;
+      });
       renderBoard();
     });
 
