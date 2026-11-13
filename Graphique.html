@@ -199,6 +199,7 @@
       z-index: 50;
     }
     .toast.show { opacity: 1; }
+    .toast.error { background: #dc2626; }
   </style>
 </head>
 <body>
@@ -287,7 +288,7 @@
   <div class="chart-container">
     <canvas id="monGraphique"></canvas>
   </div>
-  <div id="toast" class="toast">Préférences enregistrées ✓</div>
+  <div id="toast" class="toast">Enregistré dans CONFIG_WIDGETS ✓</div>
 
   <script>
     Chart.register(ChartDataLabels);
@@ -297,6 +298,8 @@
     let mappingsActuels = {};
     let customColorMap = {};
     let customOrderList = [];
+    let widgetUniqueId = "";
+    let configRowId = null;
 
     const PALETTES = {
       marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
@@ -315,26 +318,15 @@
       requiredAccess: 'full'
     });
 
-    function showToast(msg) {
+    function showToast(msg, isError = false) {
       const t = document.getElementById('toast');
       t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2000);
+      t.className = 'toast show' + (isError ? ' error' : '');
+      setTimeout(() => t.classList.remove('show'), 2500);
     }
 
-    function appliquerOptions(options) {
-      if (!options) return;
-      let cfg = options;
-
-      // Lecture prioritaire de la sauvegarde JSON atomique (100 % fidèle dans Grist)
-      if (options.configJson) {
-        try {
-          cfg = JSON.parse(options.configJson);
-        } catch (e) {
-          console.error("Erreur lecture configJson :", e);
-        }
-      }
-
+    function appliquerConfigObjet(cfg) {
+      if (!cfg) return;
       if (cfg.chartType) document.getElementById('chartType').value = cfg.chartType;
       if (cfg.sortOrder) document.getElementById('sortOrder').value = cfg.sortOrder;
       if (cfg.labelFormat) document.getElementById('labelFormat').value = cfg.labelFormat;
@@ -348,22 +340,29 @@
       }
     }
 
-    grist.onRecords(function(records, mappings) {
-      donneesActuelles = records || [];
-      mappingsActuels = mappings || {};
-      mettreAJourListeOrdre();
-      mettreAJourSelecteurCouleurs();
-      rendreGraphique();
-    });
+    // Récupère la configuration du graphique dans la table centrale CONFIG_WIDGETS
+    async function chargerConfigDepuisTable() {
+      try {
+        const sectionId = await grist.sectionApi.getSectionId();
+        widgetUniqueId = "section_" + sectionId;
 
-    grist.onOptions(function(options) {
-      appliquerOptions(options);
-      mettreAJourListeOrdre();
-      mettreAJourSelecteurCouleurs();
-      rendreGraphique();
-    });
+        const tableData = await grist.docApi.fetchTable("CONFIG_WIDGETS");
+        for (let i = 0; i < tableData.id.length; i++) {
+          if (tableData.TypeWidget[i] === "Graphique" && tableData.CibleId[i] === widgetUniqueId) {
+            configRowId = tableData.id[i];
+            const rawJson = tableData.Parametres[i];
+            if (rawJson) {
+              appliquerConfigObjet(JSON.parse(rawJson));
+            }
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn("Table CONFIG_WIDGETS non trouvée ou vide :", e);
+      }
+    }
 
-    // Sauvegarde dans une chaîne JSON unique (garantit que tableaux et couleurs sont conservés intactes)
+    // Sauvegarde la configuration du graphique dans la table centrale CONFIG_WIDGETS
     async function sauvegarderPreferences() {
       const cfg = {
         chartType: document.getElementById('chartType').value,
@@ -374,14 +373,46 @@
         customColorMap: customColorMap,
         customOrderList: customOrderList
       };
+      const jsonStr = JSON.stringify(cfg);
+
       try {
-        await grist.setOption('configJson', JSON.stringify(cfg));
-        showToast("Préférences enregistrées ✓");
+        if (!widgetUniqueId) {
+          const sectionId = await grist.sectionApi.getSectionId();
+          widgetUniqueId = "section_" + sectionId;
+        }
+
+        if (configRowId !== null) {
+          await grist.docApi.applyUserActions([
+            ["UpdateRecord", "CONFIG_WIDGETS", configRowId, { Parametres: jsonStr }]
+          ]);
+        } else {
+          const res = await grist.docApi.applyUserActions([
+            ["AddRecord", "CONFIG_WIDGETS", null, {
+              TypeWidget: "Graphique",
+              CibleId: widgetUniqueId,
+              Parametres: jsonStr,
+              Note: "Réglages graphique (" + widgetUniqueId + ")"
+            }]
+          ]);
+          if (res && res.retValues && res.retValues[0]) {
+            configRowId = res.retValues[0];
+          }
+        }
+        showToast("Enregistré dans CONFIG_WIDGETS ✓");
       } catch (e) {
-        console.error("Erreur sauvegarde :", e);
-        showToast("Erreur sauvegarde (vérifiez l'accès complet)");
+        console.error("Erreur écriture CONFIG_WIDGETS :", e);
+        showToast("Erreur : vérifiez les colonnes de CONFIG_WIDGETS et l'accès complet", true);
       }
     }
+
+    grist.onRecords(async function(records, mappings) {
+      donneesActuelles = records || [];
+      mappingsActuels = mappings || {};
+      await chargerConfigDepuisTable();
+      mettreAJourListeOrdre();
+      mettreAJourSelecteurCouleurs();
+      rendreGraphique();
+    });
 
     const panelFormat = document.getElementById('panelFormat');
     const panelCouleurs = document.getElementById('panelCouleurs');
