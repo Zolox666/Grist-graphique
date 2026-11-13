@@ -80,22 +80,22 @@
     .panel-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
     }
 
     .control-group {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12px;
+      gap: 5px;
+      font-size: 11.5px;
       color: #475569;
       font-weight: 500;
     }
 
     select {
-      font-size: 12px;
-      padding: 4px 8px;
+      font-size: 11.5px;
+      padding: 4px 7px;
       border: 1px solid #cbd5e1;
       border-radius: 4px;
       background-color: #ffffff;
@@ -226,10 +226,21 @@
       <div class="control-group">
         <label for="labelFormat">Étiquettes :</label>
         <select id="labelFormat">
-          <option value="count">Nombre de réponses</option>
+          <option value="count">Nombre</option>
           <option value="percent">Pourcentage (%)</option>
-          <option value="both">Nombre + Pourcentage</option>
+          <option value="both">Nombre + %</option>
           <option value="none">Masquer</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="fontSizeSelect">Police :</label>
+        <select id="fontSizeSelect">
+          <option value="9">Très petite (9px)</option>
+          <option value="10">Petite (10px)</option>
+          <option value="11" selected>Normale (11px)</option>
+          <option value="12">Moyenne (12px)</option>
+          <option value="13">Grande (13px)</option>
         </select>
       </div>
 
@@ -308,6 +319,7 @@
         if (options.chartType) document.getElementById('chartType').value = options.chartType;
         if (options.sortOrder) document.getElementById('sortOrder').value = options.sortOrder;
         if (options.labelFormat) document.getElementById('labelFormat').value = options.labelFormat;
+        if (options.fontSize) document.getElementById('fontSizeSelect').value = options.fontSize;
         if (options.colorPalette) document.getElementById('colorPalette').value = options.colorPalette;
         if (options.customColorMap) customColorMap = options.customColorMap;
         if (Array.isArray(options.customOrderList)) customOrderList = options.customOrderList;
@@ -321,12 +333,12 @@
       grist.setOption('chartType', document.getElementById('chartType').value);
       grist.setOption('sortOrder', document.getElementById('sortOrder').value);
       grist.setOption('labelFormat', document.getElementById('labelFormat').value);
+      grist.setOption('fontSize', document.getElementById('fontSizeSelect').value);
       grist.setOption('colorPalette', document.getElementById('colorPalette').value);
       grist.setOption('customColorMap', customColorMap);
       grist.setOption('customOrderList', customOrderList);
     }
 
-    // Gestion de l'ouverture / fermeture des 2 boutons
     const panelFormat = document.getElementById('panelFormat');
     const panelCouleurs = document.getElementById('panelCouleurs');
 
@@ -352,6 +364,7 @@
 
     document.getElementById('chartType').addEventListener('change', rendreGraphique);
     document.getElementById('labelFormat').addEventListener('change', rendreGraphique);
+    document.getElementById('fontSizeSelect').addEventListener('change', rendreGraphique);
 
     document.getElementById('sortOrder').addEventListener('change', () => {
       mettreAJourListeOrdre();
@@ -369,10 +382,30 @@
       rendreGraphique();
     });
 
-    // Attribution d'un rang logique pour les échelles de satisfaction
+    // Découpe automatiquement les libellés longs sur plusieurs lignes pour éviter l'inclinaison
+    function decouperTexteMultiligne(texte, maxChars) {
+      const str = String(texte);
+      if (str.length <= maxChars) return str;
+
+      const mots = str.split(' ');
+      const lignes = [];
+      let ligneCourante = '';
+
+      mots.forEach(mot => {
+        if ((ligneCourante + ' ' + mot).trim().length <= maxChars) {
+          ligneCourante = (ligneCourante + ' ' + mot).trim();
+        } else {
+          if (ligneCourante) lignes.push(ligneCourante);
+          ligneCourante = mot;
+        }
+      });
+      if (ligneCourante) lignes.push(ligneCourante);
+      return lignes;
+    }
+
     function getSatisfactionRank(label, inverse = false) {
       const norm = String(label).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      let rank = 50; // Neutre / Autre par défaut
+      let rank = 50;
 
       if (norm.includes("tout a fait") || norm.includes("tres satisfait") || norm.includes("toujours")) {
         rank = 1;
@@ -385,7 +418,7 @@
       } else if (norm.includes("pas du tout") || norm.includes("jamais")) {
         rank = 5;
       } else if (norm.includes("n'ai pas") || norm.includes("non concerne") || norm.includes("sans objet") || norm.includes("aucun")) {
-        rank = 90; // Toujours placé à la fin (hors échelle)
+        rank = 90;
       }
 
       if (inverse && rank < 50) {
@@ -445,7 +478,6 @@
       };
     }
 
-    // Interface de réorganisation manuelle (flèches Monter / Descendre)
     function mettreAJourListeOrdre() {
       const container = document.getElementById('customOrderContainer');
       const sortMode = document.getElementById('sortOrder').value;
@@ -458,7 +490,6 @@
 
       container.classList.add('show');
       const { labels } = extraireLabelsEtValeurs();
-      // Synchronise customOrderList avec les labels actuels
       customOrderList = [...labels];
 
       customOrderList.forEach((lbl, idx) => {
@@ -590,12 +621,19 @@
       const selectedType = document.getElementById('chartType').value;
       const selectedPalette = document.getElementById('colorPalette').value;
       const labelFormat = document.getElementById('labelFormat').value;
+      const fontSize = parseInt(document.getElementById('fontSizeSelect').value, 10) || 11;
       const colors = calculerCouleurs(labels, values, selectedPalette);
 
       const isCircular = (selectedType === 'pie' || selectedType === 'doughnut');
       const isHorizontal = (selectedType === 'horizontalBar');
       const isLine = (selectedType === 'line');
       const chartType = isHorizontal ? 'bar' : selectedType;
+
+      // Découpage multiligne intelligent selon le type de graphique
+      const maxCharsPerLine = isHorizontal ? 24 : 16;
+      const displayLabels = isCircular
+        ? labels
+        : labels.map(lbl => decouperTexteMultiligne(lbl, maxCharsPerLine));
 
       const dataset = {
         data: values,
@@ -613,7 +651,7 @@
       monGraphique = new Chart(ctx, {
         type: chartType,
         data: {
-          labels: labels,
+          labels: displayLabels,
           datasets: [dataset]
         },
         options: {
@@ -624,14 +662,23 @@
             legend: {
               display: isCircular,
               position: 'bottom',
-              labels: { boxWidth: 12, font: { size: 11 } }
+              labels: { boxWidth: 12, font: { size: fontSize } }
+            },
+            tooltip: {
+              callbacks: {
+                // Restaure le titre sur une seule ligne propre au survol de la souris
+                title: function(context) {
+                  const idx = context[0].dataIndex;
+                  return labels[idx];
+                }
+              }
             },
             datalabels: {
               display: labelFormat !== 'none',
               anchor: isCircular ? 'center' : 'end',
               align: isCircular ? 'center' : (isHorizontal ? 'right' : 'top'),
               color: isCircular ? '#ffffff' : '#1e1e1e',
-              font: { weight: 'bold', size: 11 },
+              font: { weight: 'bold', size: fontSize },
               formatter: function(value) {
                 if (value <= 0 || labelFormat === 'none') return '';
                 const pct = total > 0 ? ((value / total) * 100).toFixed(1).replace('.', ',') + ' %' : '0 %';
@@ -644,13 +691,24 @@
           scales: isCircular ? {} : {
             x: {
               grid: { display: isHorizontal },
-              ticks: { precision: 0 }
+              grace: isHorizontal ? '15%' : 0,
+              ticks: {
+                precision: 0,
+                maxRotation: 0,
+                minRotation: 0,
+                autoSkip: false,
+                font: { size: fontSize }
+              }
             },
             y: {
               beginAtZero: true,
               grace: isHorizontal ? 0 : '15%',
               grid: { display: !isHorizontal },
-              ticks: { precision: 0 }
+              ticks: {
+                precision: 0,
+                autoSkip: false,
+                font: { size: fontSize }
+              }
             }
           }
         }
