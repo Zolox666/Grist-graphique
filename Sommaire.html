@@ -55,7 +55,6 @@
       color: #0f172a;
     }
 
-    /* Panneau de configuration de l'URL du document */
     .config-box {
       display: none;
       background: #eff6ff;
@@ -236,7 +235,6 @@
       <button class="edit-btn" id="toggleEditBtn">✏️ Modifier le texte</button>
     </div>
 
-    <!-- Configuration de la racine du document Grist -->
     <div class="config-box" id="configBox">
       <strong>Configuration unique de l'adresse du document :</strong>
       <p style="margin-top: 4px; color: #1e40af;">Copiez l'adresse complète affichée dans la barre d'adresse de votre navigateur et collez-la ci-dessous :</p>
@@ -274,20 +272,11 @@
     grist.ready({
       requiredAccess: "full",
       columns: [
-        { name: "Texte", title: "Contenu Markdown de présentation", type: "Text" }
+        { name: "Texte", title: "Contenu Markdown de présentation", type: "Text" },
+        { name: "Lien",  title: "Colonne de sauvegarde de l'URL du document", type: "Text", optional: true }
       ]
     });
 
-    // Lecture des options enregistrées dans le widget Grist
-    grist.onOptions((options) => {
-      if (options && options.docUrl) {
-        savedDocUrl = options.docUrl;
-        document.getElementById("docUrlInput").value = savedDocUrl;
-      }
-      renderNavButtons();
-    });
-
-    // Extraction propre de la racine du document (avant /p/...)
     function getCleanBaseUrl() {
       if (!savedDocUrl) return "";
       try {
@@ -299,7 +288,6 @@
       }
     }
 
-    // Extraction du numéro de la page courante depuis l'URL enregistrée
     function getCurrentPageViewId() {
       if (!savedDocUrl) return null;
       const match = savedDocUrl.match(/\/p\/(\d+)/);
@@ -349,7 +337,6 @@
       const currentViewId = getCurrentPageViewId();
       let targetPages = [];
 
-      // Si la page courante est identifiée, on prend uniquement ses sous-pages
       if (currentViewId !== null) {
         const currentIdx = detectedPages.findIndex(p => p.viewId === currentViewId);
         if (currentIdx !== -1) {
@@ -364,7 +351,6 @@
         }
       }
 
-      // Sinon, on affiche toutes les sous-pages (indentation > 0)
       if (targetPages.length === 0) {
         targetPages = detectedPages.filter(p => p.indentation > 0 && p.viewId !== currentViewId);
       }
@@ -394,12 +380,18 @@
       });
     }
 
+    // Lecture directe des données enregistrées dans la table Presentation
     grist.onRecords((records, mappings) => {
       mappedColNames = mappings || {};
       if (records && records.length > 0) {
         const mapped = grist.mapColumnNames(records[0], mappings) || {};
         mapped.id = records[0].id;
         currentRecord = mapped;
+
+        // Récupération persistante de l'URL depuis la colonne Lien
+        savedDocUrl = mapped.Lien ? String(mapped.Lien).trim() : "";
+        document.getElementById("docUrlInput").value = savedDocUrl;
+
         const rawText = mapped.Texte || "*Cliquez sur « Modifier le texte » en haut à droite pour saisir votre présentation.*";
         document.getElementById("markdownRender").innerHTML = marked.parse(rawText);
         document.getElementById("markdownInput").value = mapped.Texte || "";
@@ -407,20 +399,31 @@
       loadNavigationPages();
     });
 
-    // Gestion du panneau de configuration de l'URL
     document.getElementById("toggleConfigBtn").addEventListener("click", () => {
       document.getElementById("configBox").classList.toggle("active");
     });
 
+    // Enregistrement définitif dans la cellule Lien de la table Presentation
     document.getElementById("saveConfigBtn").addEventListener("click", async () => {
       const val = document.getElementById("docUrlInput").value.trim();
-      savedDocUrl = val;
-      await grist.setOption("docUrl", val);
-      document.getElementById("configBox").classList.remove("active");
-      renderNavButtons();
+      const targetCol = mappedColNames.Lien || "Lien";
+      if (!currentRecord || !currentRecord.id) {
+        alert("Veuillez vérifier que votre table Presentation contient au moins une ligne.");
+        return;
+      }
+      try {
+        await grist.selectedTable.update({
+          id: currentRecord.id,
+          fields: { [targetCol]: val }
+        });
+        savedDocUrl = val;
+        document.getElementById("configBox").classList.remove("active");
+        renderNavButtons();
+      } catch (err) {
+        alert("Erreur d'enregistrement : vérifiez que la colonne 'Lien' est bien reliée dans le panneau de droite de Grist.");
+      }
     });
 
-    // Gestion de l'éditeur Markdown
     const editorBox = document.getElementById("editorBox");
     const markdownRender = document.getElementById("markdownRender");
 
