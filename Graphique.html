@@ -346,11 +346,13 @@
         const sectionId = await grist.sectionApi.getSectionId();
         widgetUniqueId = "section_" + sectionId;
 
-        const tableData = await grist.docApi.fetchTable("CONFIG_WIDGETS");
+        const { tableData, colType, colCible, colParam } = await resoudreStructureConfig();
+        if (!colType || !colCible || !colParam) return;
+
         for (let i = 0; i < tableData.id.length; i++) {
-          if (tableData.TypeWidget[i] === "Graphique" && tableData.CibleId[i] === widgetUniqueId) {
+          if (tableData[colType][i] === "Graphique" && tableData[colCible][i] === widgetUniqueId) {
             configRowId = tableData.id[i];
-            const rawJson = tableData.Parametres[i];
+            const rawJson = tableData[colParam][i];
             if (rawJson) {
               appliquerConfigObjet(JSON.parse(rawJson));
             }
@@ -358,7 +360,7 @@
           }
         }
       } catch (e) {
-        console.warn("Table CONFIG_WIDGETS non trouvée ou vide :", e);
+        console.warn("Lecture CONFIG_WIDGETS :", e);
       }
     }
 
@@ -381,82 +383,34 @@
           widgetUniqueId = "section_" + sectionId;
         }
 
+        const { targetTable, colType, colCible, colParam, colNote } = await resoudreStructureConfig();
+
         if (configRowId !== null) {
           await grist.docApi.applyUserActions([
-            ["UpdateRecord", "CONFIG_WIDGETS", configRowId, { Parametres: jsonStr }]
+            ["UpdateRecord", targetTable, configRowId, { [colParam]: jsonStr }]
           ]);
         } else {
+          const newFields = {
+            [colType]: "Graphique",
+            [colCible]: widgetUniqueId,
+            [colParam]: jsonStr
+          };
+          if (colNote) {
+            newFields[colNote] = "Réglages graphique (" + widgetUniqueId + ")";
+          }
           const res = await grist.docApi.applyUserActions([
-            ["AddRecord", "CONFIG_WIDGETS", null, {
-              TypeWidget: "Graphique",
-              CibleId: widgetUniqueId,
-              Parametres: jsonStr,
-              Note: "Réglages graphique (" + widgetUniqueId + ")"
-            }]
+            ["AddRecord", targetTable, null, newFields]
           ]);
           if (res && res.retValues && res.retValues[0]) {
             configRowId = res.retValues[0];
           }
         }
-        showToast("Enregistré dans CONFIG_WIDGETS ✓");
+        showToast("Enregistré dans " + targetTable + " ✓");
       } catch (e) {
-        console.error("Erreur écriture CONFIG_WIDGETS :", e);
-        showToast("Erreur : vérifiez les colonnes de CONFIG_WIDGETS et l'accès complet", true);
+        console.error("Détail erreur Grist :", e);
+        showToast("Erreur Grist : " + (e.message || e), true);
       }
     }
-
-    grist.onRecords(async function(records, mappings) {
-      donneesActuelles = records || [];
-      mappingsActuels = mappings || {};
-      await chargerConfigDepuisTable();
-      mettreAJourListeOrdre();
-      mettreAJourSelecteurCouleurs();
-      rendreGraphique();
-    });
-
-    const panelFormat = document.getElementById('panelFormat');
-    const panelCouleurs = document.getElementById('panelCouleurs');
-
-    document.getElementById('btnToggleFormat').addEventListener('click', () => {
-      panelCouleurs.classList.remove('open');
-      panelFormat.classList.toggle('open');
-    });
-
-    document.getElementById('btnToggleCouleurs').addEventListener('click', () => {
-      panelFormat.classList.remove('open');
-      panelCouleurs.classList.toggle('open');
-    });
-
-    document.getElementById('btnSaveFormat').addEventListener('click', async () => {
-      await sauvegarderPreferences();
-      panelFormat.classList.remove('open');
-    });
-
-    document.getElementById('btnSaveCouleurs').addEventListener('click', async () => {
-      await sauvegarderPreferences();
-      panelCouleurs.classList.remove('open');
-    });
-
-    document.getElementById('chartType').addEventListener('change', rendreGraphique);
-    document.getElementById('labelFormat').addEventListener('change', rendreGraphique);
-    document.getElementById('fontSizeSelect').addEventListener('change', rendreGraphique);
-
-    document.getElementById('sortOrder').addEventListener('change', () => {
-      mettreAJourListeOrdre();
-      mettreAJourSelecteurCouleurs();
-      rendreGraphique();
-    });
-
-    document.getElementById('colorPalette').addEventListener('change', (e) => {
-      const container = document.getElementById('customColorsContainer');
-      if (e.target.value === 'custom') {
-        container.classList.add('show');
-      } else {
-        container.classList.remove('show');
-      }
-      rendreGraphique();
-    });
-
     function decouperTexteMultiligne(texte, maxChars) {
       const str = String(texte);
       if (str.length <= maxChars) return str;
