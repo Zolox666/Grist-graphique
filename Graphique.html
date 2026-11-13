@@ -297,7 +297,6 @@
     let mappingsActuels = {};
     let customColorMap = {};
     let customOrderList = [];
-    let optionsLoaded = false;
 
     const PALETTES = {
       marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
@@ -323,37 +322,50 @@
       setTimeout(() => t.classList.remove('show'), 2000);
     }
 
+    function appliquerOptions(options) {
+      if (!options) return;
+      let cfg = options;
+
+      // Lecture prioritaire de la sauvegarde JSON atomique (100 % fidèle dans Grist)
+      if (options.configJson) {
+        try {
+          cfg = JSON.parse(options.configJson);
+        } catch (e) {
+          console.error("Erreur lecture configJson :", e);
+        }
+      }
+
+      if (cfg.chartType) document.getElementById('chartType').value = cfg.chartType;
+      if (cfg.sortOrder) document.getElementById('sortOrder').value = cfg.sortOrder;
+      if (cfg.labelFormat) document.getElementById('labelFormat').value = cfg.labelFormat;
+      if (cfg.fontSize) document.getElementById('fontSizeSelect').value = cfg.fontSize;
+      if (cfg.colorPalette) document.getElementById('colorPalette').value = cfg.colorPalette;
+      if (cfg.customColorMap && typeof cfg.customColorMap === 'object') {
+        customColorMap = { ...cfg.customColorMap };
+      }
+      if (Array.isArray(cfg.customOrderList)) {
+        customOrderList = cfg.customOrderList.map(s => String(s).trim());
+      }
+    }
+
     grist.onRecords(function(records, mappings) {
       donneesActuelles = records || [];
       mappingsActuels = mappings || {};
-      if (optionsLoaded) {
-        mettreAJourListeOrdre();
-      }
-      mettreAJourSelecteurCouleurs();
-      rendreGraphique();
-    });
-
-    grist.onOptions(function(options) {
-      optionsLoaded = true;
-      if (options) {
-        if (options.chartType) document.getElementById('chartType').value = options.chartType;
-        if (options.sortOrder) document.getElementById('sortOrder').value = options.sortOrder;
-        if (options.labelFormat) document.getElementById('labelFormat').value = options.labelFormat;
-        if (options.fontSize) document.getElementById('fontSizeSelect').value = options.fontSize;
-        if (options.colorPalette) document.getElementById('colorPalette').value = options.colorPalette;
-        if (options.customColorMap) customColorMap = { ...options.customColorMap };
-        if (Array.isArray(options.customOrderList)) {
-          customOrderList = options.customOrderList.map(s => String(s).trim());
-        }
-      }
       mettreAJourListeOrdre();
       mettreAJourSelecteurCouleurs();
       rendreGraphique();
     });
 
-    // Enregistrement atomique en une seule opération (évite les conflits de sauvegarde)
+    grist.onOptions(function(options) {
+      appliquerOptions(options);
+      mettreAJourListeOrdre();
+      mettreAJourSelecteurCouleurs();
+      rendreGraphique();
+    });
+
+    // Sauvegarde dans une chaîne JSON unique (garantit que tableaux et couleurs sont conservés intactes)
     async function sauvegarderPreferences() {
-      const payload = {
+      const cfg = {
         chartType: document.getElementById('chartType').value,
         sortOrder: document.getElementById('sortOrder').value,
         labelFormat: document.getElementById('labelFormat').value,
@@ -363,10 +375,10 @@
         customOrderList: customOrderList
       };
       try {
-        await grist.setOptions(payload);
+        await grist.setOption('configJson', JSON.stringify(cfg));
         showToast("Préférences enregistrées ✓");
       } catch (e) {
-        console.error("Erreur setOptions :", e);
+        console.error("Erreur sauvegarde :", e);
         showToast("Erreur sauvegarde (vérifiez l'accès complet)");
       }
     }
