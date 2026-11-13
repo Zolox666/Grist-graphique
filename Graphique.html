@@ -298,8 +298,8 @@
     let mappingsActuels = {};
     let customColorMap = {};
     let customOrderList = [];
-    let widgetUniqueId = "";
     let configRowId = null;
+    let configChargee = false;
 
     const PALETTES = {
       marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
@@ -322,7 +322,20 @@
       const t = document.getElementById('toast');
       t.textContent = msg;
       t.className = 'toast show' + (isError ? ' error' : '');
-      setTimeout(() => t.classList.remove('show'), 3000);
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    // Génère un identifiant unique et stable basé sur la table source et la colonne affichée
+    async function calculerCibleId() {
+      let tableId = "Table";
+      try {
+        if (grist.selectedTable && typeof grist.selectedTable.getTableId === 'function') {
+          tableId = await grist.selectedTable.getTableId();
+        }
+      } catch (e) {}
+
+      const catCol = (mappingsActuels && mappingsActuels.Categorie) ? mappingsActuels.Categorie : "Categorie";
+      return `${tableId}__${catCol}`;
     }
 
     function appliquerConfigObjet(cfg) {
@@ -340,7 +353,6 @@
       }
     }
 
-    // Détecte automatiquement les vrais identifiants techniques de la table et des 4 colonnes
     async function resoudreStructureConfig() {
       const tables = await grist.docApi.listTables();
       const targetTable = tables.find(t => t.toLowerCase() === "config_widgets") || "CONFIG_WIDGETS";
@@ -356,17 +368,14 @@
       return { targetTable, tableData, colType, colCible, colParam, colNote };
     }
 
-    // Récupère la configuration du graphique dans la table centrale CONFIG_WIDGETS
     async function chargerConfigDepuisTable() {
       try {
-        const sectionId = await grist.sectionApi.getSectionId();
-        widgetUniqueId = "section_" + sectionId;
-
+        const cibleId = await calculerCibleId();
         const { tableData, colType, colCible, colParam } = await resoudreStructureConfig();
         if (!colType || !colCible || !colParam) return;
 
         for (let i = 0; i < tableData.id.length; i++) {
-          if (tableData[colType][i] === "Graphique" && tableData[colCible][i] === widgetUniqueId) {
+          if (tableData[colType][i] === "Graphique" && tableData[colCible][i] === cibleId) {
             configRowId = tableData.id[i];
             const rawJson = tableData[colParam][i];
             if (rawJson) {
@@ -380,7 +389,6 @@
       }
     }
 
-    // Sauvegarde la configuration du graphique dans la table centrale CONFIG_WIDGETS
     async function sauvegarderPreferences() {
       const cfg = {
         chartType: document.getElementById('chartType').value,
@@ -394,12 +402,18 @@
       const jsonStr = JSON.stringify(cfg);
 
       try {
-        if (!widgetUniqueId) {
-          const sectionId = await grist.sectionApi.getSectionId();
-          widgetUniqueId = "section_" + sectionId;
-        }
+        const cibleId = await calculerCibleId();
+        const { targetTable, tableData, colType, colCible, colParam, colNote } = await resoudreStructureConfig();
 
-        const { targetTable, colType, colCible, colParam, colNote } = await resoudreStructureConfig();
+        // Vérifie si la ligne existe déjà dans la table avant d'écrire
+        if (configRowId === null) {
+          for (let i = 0; i < tableData.id.length; i++) {
+            if (tableData[colType][i] === "Graphique" && tableData[colCible][i] === cibleId) {
+              configRowId = tableData.id[i];
+              break;
+            }
+          }
+        }
 
         if (configRowId !== null) {
           await grist.docApi.applyUserActions([
@@ -408,11 +422,11 @@
         } else {
           const newFields = {
             [colType]: "Graphique",
-            [colCible]: widgetUniqueId,
+            [colCible]: cibleId,
             [colParam]: jsonStr
           };
           if (colNote) {
-            newFields[colNote] = "Réglages graphique (" + widgetUniqueId + ")";
+            newFields[colNote] = "Graphique : " + cibleId;
           }
           const res = await grist.docApi.applyUserActions([
             ["AddRecord", targetTable, null, newFields]
@@ -424,14 +438,17 @@
         showToast("Enregistré dans " + targetTable + " ✓");
       } catch (e) {
         console.error("Détail erreur Grist :", e);
-        showToast("Erreur Grist : " + (e.message || e), true);
+        showToast("Erreur : " + (e.message || e), true);
       }
     }
 
     grist.onRecords(async function(records, mappings) {
       donneesActuelles = records || [];
       mappingsActuels = mappings || {};
-      await chargerConfigDepuisTable();
+      if (!configChargee) {
+        await chargerConfigDepuisTable();
+        configChargee = true;
+      }
       mettreAJourListeOrdre();
       mettreAJourSelecteurCouleurs();
       rendreGraphique();
