@@ -21,7 +21,6 @@
       position: relative;
     }
 
-    /* Barre supérieure avec les 2 boutons */
     .top-bar {
       display: flex;
       justify-content: flex-end;
@@ -62,7 +61,6 @@
       border-color: #1212ff;
     }
 
-    /* Panneaux rétractables */
     .sub-panel {
       display: none;
       background: #f8fafc;
@@ -107,13 +105,12 @@
       border-color: #000091;
     }
 
-    /* Zone de réorganisation manuelle de l'ordre */
     #customOrderContainer {
       display: none;
       border-top: 1px dashed #cbd5e1;
       padding-top: 8px;
       margin-top: 8px;
-      max-height: 140px;
+      max-height: 150px;
       overflow-y: auto;
       flex-direction: column;
       gap: 4px;
@@ -147,7 +144,6 @@
       background: #e2e8f0;
     }
 
-    /* Sélecteurs individuels de couleur */
     #customColorsContainer {
       display: none;
       border-top: 1px dashed #cbd5e1;
@@ -187,11 +183,26 @@
       width: 100%;
       min-height: 0;
     }
+
+    .toast {
+      position: fixed;
+      bottom: 8px;
+      right: 8px;
+      background: #000091;
+      color: #ffffff;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 50;
+    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
 
-  <!-- Boutons de commande -->
   <div class="top-bar">
     <button type="button" id="btnToggleFormat" class="btn-action">📊 Format</button>
     <button type="button" id="btnToggleCouleurs" class="btn-action">🎨 Couleurs</button>
@@ -247,7 +258,6 @@
       <button type="button" id="btnSaveFormat" class="btn-action btn-save">💾 Enregistrer et fermer</button>
     </div>
 
-    <!-- Réorganisation manuelle si "Ordre personnalisé" est choisi -->
     <div id="customOrderContainer"></div>
   </div>
 
@@ -271,14 +281,13 @@
       </div>
       <button type="button" id="btnSaveCouleurs" class="btn-action btn-save">💾 Enregistrer et fermer</button>
     </div>
-    <!-- Liste détaillée barre par barre -->
     <div id="customColorsContainer"></div>
   </div>
 
-  <!-- Espace plein écran pour le graphique -->
   <div class="chart-container">
     <canvas id="monGraphique"></canvas>
   </div>
+  <div id="toast" class="toast">Préférences enregistrées ✓</div>
 
   <script>
     Chart.register(ChartDataLabels);
@@ -288,6 +297,7 @@
     let mappingsActuels = {};
     let customColorMap = {};
     let customOrderList = [];
+    let optionsLoaded = false;
 
     const PALETTES = {
       marianne: ['#000091', '#1212ff', '#417dc4', '#7994c2', '#a3b7d8', '#274975', '#5770be'],
@@ -306,37 +316,59 @@
       requiredAccess: 'full'
     });
 
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
     grist.onRecords(function(records, mappings) {
       donneesActuelles = records || [];
       mappingsActuels = mappings || {};
+      if (optionsLoaded) {
+        mettreAJourListeOrdre();
+      }
       mettreAJourSelecteurCouleurs();
-      mettreAJourListeOrdre();
       rendreGraphique();
     });
 
     grist.onOptions(function(options) {
+      optionsLoaded = true;
       if (options) {
         if (options.chartType) document.getElementById('chartType').value = options.chartType;
         if (options.sortOrder) document.getElementById('sortOrder').value = options.sortOrder;
         if (options.labelFormat) document.getElementById('labelFormat').value = options.labelFormat;
         if (options.fontSize) document.getElementById('fontSizeSelect').value = options.fontSize;
         if (options.colorPalette) document.getElementById('colorPalette').value = options.colorPalette;
-        if (options.customColorMap) customColorMap = options.customColorMap;
-        if (Array.isArray(options.customOrderList)) customOrderList = [...options.customOrderList];
+        if (options.customColorMap) customColorMap = { ...options.customColorMap };
+        if (Array.isArray(options.customOrderList)) {
+          customOrderList = options.customOrderList.map(s => String(s).trim());
+        }
       }
-      mettreAJourSelecteurCouleurs();
       mettreAJourListeOrdre();
+      mettreAJourSelecteurCouleurs();
       rendreGraphique();
     });
 
+    // Enregistrement atomique en une seule opération (évite les conflits de sauvegarde)
     async function sauvegarderPreferences() {
-      await grist.setOption('chartType', document.getElementById('chartType').value);
-      await grist.setOption('sortOrder', document.getElementById('sortOrder').value);
-      await grist.setOption('labelFormat', document.getElementById('labelFormat').value);
-      await grist.setOption('fontSize', document.getElementById('fontSizeSelect').value);
-      await grist.setOption('colorPalette', document.getElementById('colorPalette').value);
-      await grist.setOption('customColorMap', customColorMap);
-      await grist.setOption('customOrderList', customOrderList);
+      const payload = {
+        chartType: document.getElementById('chartType').value,
+        sortOrder: document.getElementById('sortOrder').value,
+        labelFormat: document.getElementById('labelFormat').value,
+        fontSize: document.getElementById('fontSizeSelect').value,
+        colorPalette: document.getElementById('colorPalette').value,
+        customColorMap: customColorMap,
+        customOrderList: customOrderList
+      };
+      try {
+        await grist.setOptions(payload);
+        showToast("Préférences enregistrées ✓");
+      } catch (e) {
+        console.error("Erreur setOptions :", e);
+        showToast("Erreur sauvegarde (vérifiez l'accès complet)");
+      }
     }
 
     const panelFormat = document.getElementById('panelFormat');
@@ -446,8 +478,11 @@
         }
         let label = "Sans libellé";
         if (val !== null && val !== undefined && val !== '') {
-          label = (typeof val === 'object') ? (Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val))) : String(val);
+          label = (typeof val === 'object')
+            ? (Array.isArray(val) ? val.join(', ') : (val.label || JSON.stringify(val)))
+            : String(val);
         }
+        label = label.trim();
 
         let num = r[valKey] !== undefined ? r[valKey] : (r.Valeur !== undefined ? r.Valeur : r.count);
         let value = Number(num) || 0;
@@ -494,7 +529,6 @@
       container.classList.add('show');
       const { labels } = extraireLabelsEtValeurs();
 
-      // Préserve l'ordre existant et ajoute uniquement les éventuelles nouvelles catégories à la fin
       if (customOrderList.length === 0) {
         customOrderList = [...labels];
       } else {
@@ -503,7 +537,6 @@
             customOrderList.push(lbl);
           }
         });
-        // Retire les libellés qui n'existent plus dans les données
         customOrderList = customOrderList.filter(lbl => labels.includes(lbl));
       }
 
