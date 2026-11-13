@@ -303,7 +303,7 @@
         { name: "Categorie", title: "Colonne des catégories", optional: false },
         { name: "Valeur", title: "Colonne des valeurs (ou count)", optional: false }
       ],
-      requiredAccess: 'read table'
+      requiredAccess: 'full'
     });
 
     grist.onRecords(function(records, mappings) {
@@ -322,21 +322,21 @@
         if (options.fontSize) document.getElementById('fontSizeSelect').value = options.fontSize;
         if (options.colorPalette) document.getElementById('colorPalette').value = options.colorPalette;
         if (options.customColorMap) customColorMap = options.customColorMap;
-        if (Array.isArray(options.customOrderList)) customOrderList = options.customOrderList;
+        if (Array.isArray(options.customOrderList)) customOrderList = [...options.customOrderList];
       }
       mettreAJourSelecteurCouleurs();
       mettreAJourListeOrdre();
       rendreGraphique();
     });
 
-    function sauvegarderPreferences() {
-      grist.setOption('chartType', document.getElementById('chartType').value);
-      grist.setOption('sortOrder', document.getElementById('sortOrder').value);
-      grist.setOption('labelFormat', document.getElementById('labelFormat').value);
-      grist.setOption('fontSize', document.getElementById('fontSizeSelect').value);
-      grist.setOption('colorPalette', document.getElementById('colorPalette').value);
-      grist.setOption('customColorMap', customColorMap);
-      grist.setOption('customOrderList', customOrderList);
+    async function sauvegarderPreferences() {
+      await grist.setOption('chartType', document.getElementById('chartType').value);
+      await grist.setOption('sortOrder', document.getElementById('sortOrder').value);
+      await grist.setOption('labelFormat', document.getElementById('labelFormat').value);
+      await grist.setOption('fontSize', document.getElementById('fontSizeSelect').value);
+      await grist.setOption('colorPalette', document.getElementById('colorPalette').value);
+      await grist.setOption('customColorMap', customColorMap);
+      await grist.setOption('customOrderList', customOrderList);
     }
 
     const panelFormat = document.getElementById('panelFormat');
@@ -352,13 +352,13 @@
       panelCouleurs.classList.toggle('open');
     });
 
-    document.getElementById('btnSaveFormat').addEventListener('click', () => {
-      sauvegarderPreferences();
+    document.getElementById('btnSaveFormat').addEventListener('click', async () => {
+      await sauvegarderPreferences();
       panelFormat.classList.remove('open');
     });
 
-    document.getElementById('btnSaveCouleurs').addEventListener('click', () => {
-      sauvegarderPreferences();
+    document.getElementById('btnSaveCouleurs').addEventListener('click', async () => {
+      await sauvegarderPreferences();
       panelCouleurs.classList.remove('open');
     });
 
@@ -382,7 +382,6 @@
       rendreGraphique();
     });
 
-    // Découpe automatiquement les libellés longs sur plusieurs lignes pour éviter l'inclinaison
     function decouperTexteMultiligne(texte, maxChars) {
       const str = String(texte);
       if (str.length <= maxChars) return str;
@@ -404,7 +403,11 @@
     }
 
     function getSatisfactionRank(label, inverse = false) {
-      const norm = String(label).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const norm = String(label)
+        .toLowerCase()
+        .replace(/['’`]/g, "'")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
       let rank = 50;
 
       if (norm.includes("tout a fait") || norm.includes("tres satisfait") || norm.includes("toujours")) {
@@ -490,7 +493,19 @@
 
       container.classList.add('show');
       const { labels } = extraireLabelsEtValeurs();
-      customOrderList = [...labels];
+
+      // Préserve l'ordre existant et ajoute uniquement les éventuelles nouvelles catégories à la fin
+      if (customOrderList.length === 0) {
+        customOrderList = [...labels];
+      } else {
+        labels.forEach(lbl => {
+          if (!customOrderList.includes(lbl)) {
+            customOrderList.push(lbl);
+          }
+        });
+        // Retire les libellés qui n'existent plus dans les données
+        customOrderList = customOrderList.filter(lbl => labels.includes(lbl));
+      }
 
       customOrderList.forEach((lbl, idx) => {
         const row = document.createElement('div');
@@ -629,7 +644,6 @@
       const isLine = (selectedType === 'line');
       const chartType = isHorizontal ? 'bar' : selectedType;
 
-      // Découpage multiligne intelligent selon le type de graphique
       const maxCharsPerLine = isHorizontal ? 24 : 16;
       const displayLabels = isCircular
         ? labels
@@ -666,7 +680,6 @@
             },
             tooltip: {
               callbacks: {
-                // Restaure le titre sur une seule ligne propre au survol de la souris
                 title: function(context) {
                   const idx = context[0].dataIndex;
                   return labels[idx];
