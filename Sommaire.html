@@ -219,6 +219,7 @@
   <script>
     let currentRecord = null;
     let mappedColNames = {};
+    let baseDocUrl = "";
 
     grist.ready({
       requiredAccess: "full",
@@ -227,19 +228,31 @@
       ]
     });
 
-    // Détection automatique des sous-pages (ou pages du document) via les tables système Grist
+    // Récupération de l'URL exacte du document Grist (compatible SSO / AgentConnect)
+    async function initDocUrl() {
+      try {
+        if (document.referrer) {
+          // Nettoie l'URL pour ne garder que la racine du document (avant /p/...)
+          const url = new URL(document.referrer);
+          const cleanPath = url.pathname.replace(/\/p\/\d+.*$/, "");
+          baseDocUrl = `${url.origin}${cleanPath}`;
+        }
+      } catch (e) {
+        console.warn("Impossible de déduire baseDocUrl depuis referrer", e);
+      }
+    }
+
     async function loadNavigationPages() {
+      await initDocUrl();
       try {
         const pagesData = await grist.docApi.fetchTable("_grist_Pages");
         const viewsData = await grist.docApi.fetchTable("_grist_Views");
 
-        // Construction de la liste structurée des pages
         const pages = [];
         for (let i = 0; i < pagesData.id.length; i++) {
           const viewId = pagesData.viewRef[i];
           const viewIdx = viewsData.id.indexOf(viewId);
           const viewName = viewIdx !== -1 ? viewsData.name[viewIdx] : "";
-          // Ignorer les tables techniques masquées ou vues internes
           if (!viewName || viewName.startsWith("_")) continue;
 
           pages.push({
@@ -251,16 +264,13 @@
           });
         }
 
-        // Tri selon l'ordre exact du menu latéral gauche de Grist
         pages.sort((a, b) => a.pagePos - b.pagePos);
 
-        // Repérage de la page active dans l'URL parente pour n'afficher que ses sous-pages
+        // Détection de la page active via document.referrer
         let currentViewId = null;
-        try {
-          const match = window.parent.location.pathname.match(/\/p\/(\d+)/);
+        if (document.referrer) {
+          const match = document.referrer.match(/\/p\/(\d+)/);
           if (match) currentViewId = parseInt(match[1], 10);
-        } catch (e) {
-          // En cas de restriction cross-origin, on filtrera par indentation > 0
         }
 
         let targetPages = [];
@@ -268,7 +278,6 @@
           const currentIdx = pages.findIndex(p => p.viewId === currentViewId);
           if (currentIdx !== -1) {
             const parentIndent = pages[currentIdx].indentation;
-            // Récupérer toutes les sous-pages imbriquées juste sous la page courante
             for (let j = currentIdx + 1; j < pages.length; j++) {
               if (pages[j].indentation > parentIndent) {
                 targetPages.push(pages[j]);
@@ -279,7 +288,7 @@
           }
         }
 
-        // Si aucune sous-page spécifique n'est détectée, prendre toutes les pages indentées (sous-pages)
+        // Solution de repli : affiche toutes les sous-pages indentées
         if (targetPages.length === 0) {
           targetPages = pages.filter(p => p.indentation > 0 && p.viewId !== currentViewId);
         }
@@ -303,30 +312,16 @@
       navSection.style.display = "block";
 
       pagesList.forEach(page => {
-        const btn = document.createElement("button");
-        btn.className = "nav-card";
-        btn.innerHTML = `<span>${page.name}</span><span class="nav-arrow">→</span>`;
-        btn.addEventListener("click", () => {
-          navigateToPage(page.viewId);
-        });
-        navGrid.appendChild(btn);
+        // Utilisation d'une balise <a> native avec target="_top" pour préserver les cookies de session
+        const link = document.createElement("a");
+        link.className = "nav-card";
+        link.target = "_top";
+        link.href = baseDocUrl ? `${baseDocUrl}/p/${page.viewId}` : `#`;
+        link.innerHTML = `<span>${page.name}</span><span class="nav-arrow">→</span>`;
+        navGrid.appendChild(link);
       });
     }
 
-    // Navigation fluide vers la page sélectionnée dans Grist
-    function navigateToPage(viewId) {
-      try {
-        const parentUrl = new URL(window.parent.location.href);
-        parentUrl.pathname = parentUrl.pathname.replace(/\/p\/\d+.*$/, `/p/${viewId}`);
-        window.parent.location.href = parentUrl.toString();
-      } catch (e) {
-        // Solution de repli si le navigateur bloque l'accès direct au parent
-        const baseUrl = document.referrer ? document.referrer.replace(/\/p\/\d+.*$/, `/p/${viewId}`) : "";
-        if (baseUrl) window.top.location.href = baseUrl;
-      }
-    }
-
-    // Réception du texte Markdown depuis la table Grist
     grist.onRecords((records, mappings) => {
       mappedColNames = mappings || {};
       if (records && records.length > 0) {
@@ -340,7 +335,6 @@
       loadNavigationPages();
     });
 
-    // Gestion de l'éditeur intégré
     const editorBox = document.getElementById("editorBox");
     const markdownRender = document.getElementById("markdownRender");
 
@@ -367,5 +361,6 @@
       markdownRender.style.display = "block";
     });
   </script>
+  
 </body>
 </html>
