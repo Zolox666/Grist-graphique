@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Page de Présentation et Navigation - Grist</title>
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
-  <!-- Bibliothèque légère pour le rendu Markdown -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     * {
@@ -32,11 +31,11 @@
       border: 1px solid #e2e8f0;
     }
 
-    /* Barre supérieure d'édition */
     .top-actions {
       display: flex;
       justify-content: flex-end;
-      margin-bottom: 8px;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
     .edit-btn {
@@ -56,7 +55,35 @@
       color: #0f172a;
     }
 
-    /* Rendu du texte Markdown */
+    /* Panneau de configuration de l'URL du document */
+    .config-box {
+      display: none;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      font-size: 13.5px;
+    }
+
+    .config-box.active {
+      display: block;
+    }
+
+    .config-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .config-input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #93c5fd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
     .markdown-content h1 {
       font-size: 24px;
       color: #0f172a;
@@ -95,7 +122,6 @@
       margin: 20px 0;
     }
 
-    /* Zone d'édition directe */
     .editor-box {
       display: none;
       flex-direction: column;
@@ -140,7 +166,6 @@
       background: #1d4ed8;
     }
 
-    /* Section des onglets / pages générés automatiquement */
     .nav-section {
       margin-top: 28px;
       padding-top: 22px;
@@ -191,13 +216,34 @@
       font-size: 18px;
       font-weight: bold;
     }
+
+    .warning-banner {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
 
   <div class="container">
     <div class="top-actions">
-      <button class="edit-btn" id="toggleEditBtn">Modifier le texte</button>
+      <button class="edit-btn" id="toggleConfigBtn">⚙️ Lien du document</button>
+      <button class="edit-btn" id="toggleEditBtn">✏️ Modifier le texte</button>
+    </div>
+
+    <!-- Configuration de la racine du document Grist -->
+    <div class="config-box" id="configBox">
+      <strong>Configuration unique de l'adresse du document :</strong>
+      <p style="margin-top: 4px; color: #1e40af;">Copiez l'adresse complète affichée dans la barre d'adresse de votre navigateur et collez-la ci-dessous :</p>
+      <div class="config-row">
+        <input type="text" class="config-input" id="docUrlInput" placeholder="Ex : https://grist.numerique.gouv.fr/o/mon-espace/xyz123/Enquete-Usagers/p/1" />
+        <button class="save-btn" id="saveConfigBtn">Enregistrer l'URL</button>
+      </div>
     </div>
 
     <div class="editor-box" id="editorBox">
@@ -212,6 +258,9 @@
 
     <div class="nav-section" id="navSection" style="display: none;">
       <div class="nav-title">Accéder directement aux rubriques</div>
+      <div id="urlWarning" class="warning-banner" style="display: none;">
+        Cliquez sur <strong>« ⚙️ Lien du document »</strong> en haut à droite pour coller l'adresse de votre document Grist afin d'activer les boutons ci-dessous.
+      </div>
       <div class="nav-grid" id="navGrid"></div>
     </div>
   </div>
@@ -219,7 +268,8 @@
   <script>
     let currentRecord = null;
     let mappedColNames = {};
-    let baseDocUrl = "";
+    let savedDocUrl = "";
+    let detectedPages = [];
 
     grist.ready({
       requiredAccess: "full",
@@ -228,22 +278,35 @@
       ]
     });
 
-    // Récupération de l'URL exacte du document Grist (compatible SSO / AgentConnect)
-    async function initDocUrl() {
+    // Lecture des options enregistrées dans le widget Grist
+    grist.onOptions((options) => {
+      if (options && options.docUrl) {
+        savedDocUrl = options.docUrl;
+        document.getElementById("docUrlInput").value = savedDocUrl;
+      }
+      renderNavButtons();
+    });
+
+    // Extraction propre de la racine du document (avant /p/...)
+    function getCleanBaseUrl() {
+      if (!savedDocUrl) return "";
       try {
-        if (document.referrer) {
-          // Nettoie l'URL pour ne garder que la racine du document (avant /p/...)
-          const url = new URL(document.referrer);
-          const cleanPath = url.pathname.replace(/\/p\/\d+.*$/, "");
-          baseDocUrl = `${url.origin}${cleanPath}`;
-        }
+        const url = new URL(savedDocUrl.trim());
+        const cleanPath = url.pathname.replace(/\/p\/\d+.*$/, "");
+        return `${url.origin}${cleanPath}`;
       } catch (e) {
-        console.warn("Impossible de déduire baseDocUrl depuis referrer", e);
+        return savedDocUrl.trim().replace(/\/p\/\d+.*$/, "");
       }
     }
 
+    // Extraction du numéro de la page courante depuis l'URL enregistrée
+    function getCurrentPageViewId() {
+      if (!savedDocUrl) return null;
+      const match = savedDocUrl.match(/\/p\/(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    }
+
     async function loadNavigationPages() {
-      await initDocUrl();
       try {
         const pagesData = await grist.docApi.fetchTable("_grist_Pages");
         const viewsData = await grist.docApi.fetchTable("_grist_Views");
@@ -265,59 +328,68 @@
         }
 
         pages.sort((a, b) => a.pagePos - b.pagePos);
-
-        // Détection de la page active via document.referrer
-        let currentViewId = null;
-        if (document.referrer) {
-          const match = document.referrer.match(/\/p\/(\d+)/);
-          if (match) currentViewId = parseInt(match[1], 10);
-        }
-
-        let targetPages = [];
-        if (currentViewId !== null) {
-          const currentIdx = pages.findIndex(p => p.viewId === currentViewId);
-          if (currentIdx !== -1) {
-            const parentIndent = pages[currentIdx].indentation;
-            for (let j = currentIdx + 1; j < pages.length; j++) {
-              if (pages[j].indentation > parentIndent) {
-                targetPages.push(pages[j]);
-              } else {
-                break;
-              }
-            }
-          }
-        }
-
-        // Solution de repli : affiche toutes les sous-pages indentées
-        if (targetPages.length === 0) {
-          targetPages = pages.filter(p => p.indentation > 0 && p.viewId !== currentViewId);
-        }
-
-        renderNavButtons(targetPages);
+        detectedPages = pages;
+        renderNavButtons();
       } catch (err) {
-        console.error("Impossible de charger l'arborescence des pages :", err);
+        console.error("Erreur lecture pages :", err);
       }
     }
 
-    function renderNavButtons(pagesList) {
+    function renderNavButtons() {
       const navSection = document.getElementById("navSection");
       const navGrid = document.getElementById("navGrid");
+      const urlWarning = document.getElementById("urlWarning");
       navGrid.innerHTML = "";
 
-      if (!pagesList || pagesList.length === 0) {
+      if (detectedPages.length === 0) {
+        navSection.style.display = "none";
+        return;
+      }
+
+      const currentViewId = getCurrentPageViewId();
+      let targetPages = [];
+
+      // Si la page courante est identifiée, on prend uniquement ses sous-pages
+      if (currentViewId !== null) {
+        const currentIdx = detectedPages.findIndex(p => p.viewId === currentViewId);
+        if (currentIdx !== -1) {
+          const parentIndent = detectedPages[currentIdx].indentation;
+          for (let j = currentIdx + 1; j < detectedPages.length; j++) {
+            if (detectedPages[j].indentation > parentIndent) {
+              targetPages.push(detectedPages[j]);
+            } else {
+              break;
+            }
+          }
+        }
+      }
+
+      // Sinon, on affiche toutes les sous-pages (indentation > 0)
+      if (targetPages.length === 0) {
+        targetPages = detectedPages.filter(p => p.indentation > 0 && p.viewId !== currentViewId);
+      }
+
+      if (targetPages.length === 0) {
         navSection.style.display = "none";
         return;
       }
 
       navSection.style.display = "block";
+      const baseUrl = getCleanBaseUrl();
+      urlWarning.style.display = baseUrl ? "none" : "block";
 
-      pagesList.forEach(page => {
-        // Utilisation d'une balise <a> native avec target="_top" pour préserver les cookies de session
+      targetPages.forEach(page => {
         const link = document.createElement("a");
         link.className = "nav-card";
         link.target = "_top";
-        link.href = baseDocUrl ? `${baseDocUrl}/p/${page.viewId}` : `#`;
+        link.href = baseUrl ? `${baseUrl}/p/${page.viewId}` : "#";
         link.innerHTML = `<span>${page.name}</span><span class="nav-arrow">→</span>`;
+        if (!baseUrl) {
+          link.addEventListener("click", (e) => {
+            e.preventDefault();
+            document.getElementById("configBox").classList.add("active");
+          });
+        }
         navGrid.appendChild(link);
       });
     }
@@ -335,6 +407,20 @@
       loadNavigationPages();
     });
 
+    // Gestion du panneau de configuration de l'URL
+    document.getElementById("toggleConfigBtn").addEventListener("click", () => {
+      document.getElementById("configBox").classList.toggle("active");
+    });
+
+    document.getElementById("saveConfigBtn").addEventListener("click", async () => {
+      const val = document.getElementById("docUrlInput").value.trim();
+      savedDocUrl = val;
+      await grist.setOption("docUrl", val);
+      document.getElementById("configBox").classList.remove("active");
+      renderNavButtons();
+    });
+
+    // Gestion de l'éditeur Markdown
     const editorBox = document.getElementById("editorBox");
     const markdownRender = document.getElementById("markdownRender");
 
@@ -361,6 +447,5 @@
       markdownRender.style.display = "block";
     });
   </script>
-  
 </body>
 </html>
