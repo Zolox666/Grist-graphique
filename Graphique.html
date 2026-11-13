@@ -288,7 +288,7 @@
   <div class="chart-container">
     <canvas id="monGraphique"></canvas>
   </div>
-  <div id="toast" class="toast">Enregistré dans CONFIG_WIDGETS ✓</div>
+  <div id="toast" class="toast">Enregistré ✓</div>
 
   <script>
     Chart.register(ChartDataLabels);
@@ -322,7 +322,7 @@
       const t = document.getElementById('toast');
       t.textContent = msg;
       t.className = 'toast show' + (isError ? ' error' : '');
-      setTimeout(() => t.classList.remove('show'), 2500);
+      setTimeout(() => t.classList.remove('show'), 3000);
     }
 
     function appliquerConfigObjet(cfg) {
@@ -338,6 +338,22 @@
       if (Array.isArray(cfg.customOrderList)) {
         customOrderList = cfg.customOrderList.map(s => String(s).trim());
       }
+    }
+
+    // Détecte automatiquement les vrais identifiants techniques de la table et des 4 colonnes
+    async function resoudreStructureConfig() {
+      const tables = await grist.docApi.listTables();
+      const targetTable = tables.find(t => t.toLowerCase() === "config_widgets") || "CONFIG_WIDGETS";
+
+      const tableData = await grist.docApi.fetchTable(targetTable);
+      const cols = Object.keys(tableData).filter(k => k !== "id" && k !== "manualSort");
+
+      const colType = cols.find(c => c.toLowerCase() === "typewidget") || cols[0];
+      const colCible = cols.find(c => c.toLowerCase() === "cibleid") || cols[1];
+      const colParam = cols.find(c => c.toLowerCase() === "parametres") || cols[2];
+      const colNote = cols.find(c => c.toLowerCase() === "note") || cols[3];
+
+      return { targetTable, tableData, colType, colCible, colParam, colNote };
     }
 
     // Récupère la configuration du graphique dans la table centrale CONFIG_WIDGETS
@@ -411,6 +427,59 @@
         showToast("Erreur Grist : " + (e.message || e), true);
       }
     }
+
+    grist.onRecords(async function(records, mappings) {
+      donneesActuelles = records || [];
+      mappingsActuels = mappings || {};
+      await chargerConfigDepuisTable();
+      mettreAJourListeOrdre();
+      mettreAJourSelecteurCouleurs();
+      rendreGraphique();
+    });
+
+    const panelFormat = document.getElementById('panelFormat');
+    const panelCouleurs = document.getElementById('panelCouleurs');
+
+    document.getElementById('btnToggleFormat').addEventListener('click', () => {
+      panelCouleurs.classList.remove('open');
+      panelFormat.classList.toggle('open');
+    });
+
+    document.getElementById('btnToggleCouleurs').addEventListener('click', () => {
+      panelFormat.classList.remove('open');
+      panelCouleurs.classList.toggle('open');
+    });
+
+    document.getElementById('btnSaveFormat').addEventListener('click', async () => {
+      await sauvegarderPreferences();
+      panelFormat.classList.remove('open');
+    });
+
+    document.getElementById('btnSaveCouleurs').addEventListener('click', async () => {
+      await sauvegarderPreferences();
+      panelCouleurs.classList.remove('open');
+    });
+
+    document.getElementById('chartType').addEventListener('change', rendreGraphique);
+    document.getElementById('labelFormat').addEventListener('change', rendreGraphique);
+    document.getElementById('fontSizeSelect').addEventListener('change', rendreGraphique);
+
+    document.getElementById('sortOrder').addEventListener('change', () => {
+      mettreAJourListeOrdre();
+      mettreAJourSelecteurCouleurs();
+      rendreGraphique();
+    });
+
+    document.getElementById('colorPalette').addEventListener('change', (e) => {
+      const container = document.getElementById('customColorsContainer');
+      if (e.target.value === 'custom') {
+        container.classList.add('show');
+      } else {
+        container.classList.remove('show');
+      }
+      rendreGraphique();
+    });
+
     function decouperTexteMultiligne(texte, maxChars) {
       const str = String(texte);
       if (str.length <= maxChars) return str;
